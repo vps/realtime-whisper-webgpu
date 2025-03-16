@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { Link } from "react-router-dom";
 import { saveTranscript } from "../store/slices/transcriptSlice";
 import { updateUsageMinutes } from "../store/slices/subscriptionSlice";
 import { AudioVisualizer } from "../components/AudioVisualizer";
@@ -8,11 +9,10 @@ import { LanguageSelector } from "../components/LanguageSelector";
 import { TIER_FEATURES, SUBSCRIPTION_TIERS } from "../store/slices/subscriptionSlice";
 
 const IS_WEBGPU_AVAILABLE = !!navigator.gpu;
-
 const WHISPER_SAMPLING_RATE = 16_000;
 
 const DashboardPage = () => {
-  // Create a reference to the worker object.
+  // Create a reference to the worker object
   const worker = useRef(null);
   const recorderRef = useRef(null);
 
@@ -56,7 +56,7 @@ const DashboardPage = () => {
     avgAccuracy: 95, // Placeholder
   });
 
-  // We use the `useEffect` hook to setup the worker as soon as the component is mounted.
+  // Set up the worker
   useEffect(() => {
     if (!worker.current) {
       // Create the worker if it does not yet exist.
@@ -295,52 +295,48 @@ const DashboardPage = () => {
   }, []);
 
   return IS_WEBGPU_AVAILABLE ? (
-    <div className="flex flex-col h-full mx-auto text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-900">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-1">Welcome back, {user?.displayName || 'User'}</p>
+    <div className="flex flex-col h-full mx-auto text-neutral-800 dark:text-neutral-200 bg-white dark:bg-neutral-900">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-neutral-900 dark:text-white">Dashboard</h1>
+        <p className="text-neutral-500 dark:text-neutral-400 mt-1">Welcome back, {user?.displayName || 'User'}</p>
       </div>
       
       {/* Usage Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold mb-2">Transcripts</h3>
-          <p className="text-3xl font-bold">{stats.transcriptCount}</p>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Total saved</p>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold mb-2">Duration</h3>
-          <p className="text-3xl font-bold">{Math.round(stats.totalDuration / 60)}m</p>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Audio processed</p>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold mb-2">Accuracy</h3>
-          <p className="text-3xl font-bold">{stats.avgAccuracy}%</p>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Estimated</p>
-        </div>
+        {[
+          { title: "Transcripts", value: stats.transcriptCount, unit: "Total saved" },
+          { title: "Duration", value: Math.round(stats.totalDuration / 60), unit: "min. processed" },
+          { title: "Accuracy", value: stats.avgAccuracy, unit: "% estimated" }
+        ].map((stat, index) => (
+          <div key={index} className="card p-6">
+            <h3 className="text-sm uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">{stat.title}</h3>
+            <div className="flex items-baseline">
+              <p className="text-3xl font-bold text-neutral-900 dark:text-white">{stat.value}</p>
+              <p className="ml-2 text-sm text-neutral-500 dark:text-neutral-400">{stat.unit}</p>
+            </div>
+          </div>
+        ))}
       </div>
       
-      {/* Usage meter */}
+      {/* Usage meter for free tier */}
       {tier === SUBSCRIPTION_TIERS.FREE && (
-        <div className="mb-8 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <div className="flex justify-between mb-2">
-            <h3 className="text-lg font-semibold">Daily Usage</h3>
-            <span className="text-sm text-gray-500 dark:text-gray-400">
+        <div className="card p-6 mb-8">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-lg font-medium text-neutral-900 dark:text-white">Daily Usage</h3>
+            <span className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
               {Math.round(usageMinutes * 10) / 10} / {usageLimit} minutes
             </span>
           </div>
-          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+          <div className="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2.5">
             <div 
-              className={`h-2.5 rounded-full ${usageExceeded ? 'bg-red-600' : 'bg-blue-600'}`} 
+              className={`h-2.5 rounded-full ${usageExceeded ? 'bg-red-500' : 'bg-primary-500'}`} 
               style={{ width: `${usagePercentage}%` }}
             ></div>
           </div>
           {usageExceeded && (
-            <div className="mt-3 text-sm text-red-600 dark:text-red-400">
+            <div className="mt-3 text-sm text-red-500 dark:text-red-400">
               You've reached your daily limit. 
-              <a href="/subscription" className="font-medium ml-1 underline">
+              <a href="/subscription" className="font-medium ml-1 text-primary-600 dark:text-primary-400 hover:underline">
                 Upgrade your plan
               </a> for unlimited transcription.
             </div>
@@ -350,44 +346,39 @@ const DashboardPage = () => {
       
       {/* Transcription Interface */}
       <div className="flex-1 overflow-auto">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">Real-time Transcription</h2>
+        <div className="card p-6">
+          <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-6">Real-time Transcription</h2>
           
           {status === null && (
-            <div className="mb-4">
-              <p className="max-w-[480px] mb-4">
-                <br />
+            <div className="mb-6">
+              <p className="max-w-2xl mb-6 text-neutral-600 dark:text-neutral-300">
                 You are about to load{" "}
                 <a
                   href="https://huggingface.co/onnx-community/whisper-base"
                   target="_blank"
                   rel="noreferrer"
-                  className="font-medium underline"
+                  className="text-primary-600 dark:text-primary-400 hover:underline"
                 >
                   whisper-base
                 </a>
-                , a 73 million parameter speech recognition model that is
-                optimized for inference on the web. Once downloaded, the model
-                (~200&nbsp;MB) will be cached and reused when you revisit the
-                page.
-                <br />
-                <br />
+                , a 73 million parameter speech recognition model optimized for web inference. Once downloaded, the model
+                (~200 MB) will be cached and reused when you revisit the page.
+                <br /><br />
                 Everything runs directly in your browser using{" "}
                 <a
                   href="https://huggingface.co/docs/transformers.js"
                   target="_blank"
                   rel="noreferrer"
-                  className="underline"
+                  className="text-primary-600 dark:text-primary-400 hover:underline"
                 >
-                  🤗&nbsp;Transformers.js
+                  🤗 Transformers.js
                 </a>{" "}
                 and ONNX Runtime Web, meaning no data is sent to a server. You
-                can even disconnect from the internet after the model has
-                loaded!
+                can even disconnect from the internet after the model has loaded!
               </p>
 
               <button
-                className="border px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed select-none"
+                className="btn-primary"
                 onClick={() => {
                   worker.current.postMessage({ type: "load" });
                   setStatus("loading");
@@ -399,19 +390,21 @@ const DashboardPage = () => {
             </div>
           )}
 
-          <div className="w-full md:max-w-[600px] p-2">
+          <div className="w-full max-w-3xl">
             <AudioVisualizer 
-              className="w-full h-20 rounded-lg" 
+              className="w-full h-24 rounded-xl bg-neutral-50 dark:bg-neutral-800/70" 
               stream={stream} 
             />
             
             {status === "ready" && (
-              <div className="relative mt-3">
-                <p className="w-full h-[120px] overflow-y-auto overflow-wrap-anywhere border rounded-lg p-2 bg-white dark:bg-gray-900">
-                  {text || "Start speaking to see transcription..."}
-                </p>
+              <div className="relative mt-6">
+                <div className="w-full min-h-[160px] overflow-y-auto overflow-wrap-anywhere rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 bg-white dark:bg-neutral-800/50">
+                  <p className="text-neutral-800 dark:text-neutral-200">
+                    {text || "Start speaking to see transcription..."}
+                  </p>
+                </div>
                 {tps && (
-                  <span className="absolute bottom-0 right-0 px-1 text-xs text-gray-500 dark:text-gray-400">
+                  <span className="absolute bottom-2 right-3 px-2 py-0.5 bg-neutral-100 dark:bg-neutral-800 rounded-md text-xs text-neutral-500 dark:text-neutral-400">
                     {tps.toFixed(2)} tok/s
                   </span>
                 )}
@@ -420,7 +413,7 @@ const DashboardPage = () => {
           </div>
           
           {status === "ready" && (
-            <div className="relative w-full flex justify-between mt-3">
+            <div className="flex flex-wrap items-center justify-between gap-4 mt-6">
               <LanguageSelector
                 language={language}
                 setLanguage={(e) => {
@@ -432,28 +425,28 @@ const DashboardPage = () => {
                 }}
               />
               
-              <div className="space-x-2">
+              <div className="flex items-center gap-3">
                 {usageExceeded ? (
-                  <button
-                    className="border rounded-lg px-3 py-1 bg-blue-600 text-white hover:bg-blue-700"
-                    onClick={() => window.location.href = '/subscription'}
+                  <Link
+                    to="/subscription"
+                    className="btn-primary"
                   >
                     Upgrade Plan
-                  </button>
+                  </Link>
                 ) : (
                   <>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                    <span className="text-sm text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-2 py-1 rounded-md">
                       {Math.round(audioLength)} sec
                     </span>
                     <button
-                      className="border rounded-lg px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-50"
+                      className="btn-secondary"
                       onClick={handleReset}
                       disabled={isProcessing}
                     >
                       Reset
                     </button>
                     <button
-                      className="border rounded-lg px-3 py-1 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                      className="btn-primary"
                       onClick={() => {
                         if (recording) {
                           recorderRef.current?.stop();
@@ -472,8 +465,8 @@ const DashboardPage = () => {
           )}
           
           {status === "loading" && (
-            <div className="w-full max-w-[500px] text-left mx-auto p-4">
-              <p className="text-center">{loadingMessage}</p>
+            <div className="w-full max-w-lg mx-auto p-4">
+              <p className="text-center text-neutral-700 dark:text-neutral-300 mb-6">{loadingMessage}</p>
               {progressItems.map(({ file, progress, total }, i) => (
                 <Progress
                   key={i}
@@ -488,10 +481,15 @@ const DashboardPage = () => {
       </div>
     </div>
   ) : (
-    <div className="fixed w-screen h-screen bg-black z-10 bg-opacity-[92%] text-white text-2xl font-semibold flex justify-center items-center text-center">
-      WebGPU is not supported
-      <br />
-      by this browser :&#40;
+    <div className="fixed inset-0 z-50 bg-neutral-900 bg-opacity-95 flex flex-col justify-center items-center">
+      <div className="text-3xl font-medium text-white text-center">
+        WebGPU is not supported
+        <br />
+        by this browser
+      </div>
+      <div className="text-xl text-neutral-400 mt-4">
+        Try using Chrome or Edge
+      </div>
     </div>
   );
 };
