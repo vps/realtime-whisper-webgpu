@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { registerUser, loginWithGoogle, clearError } from '../../store/slices/authSlice';
 
 const RegisterForm = () => {
@@ -10,14 +10,23 @@ const RegisterForm = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [formError, setFormError] = useState(null);
   
-  const { isLoading, error } = useSelector((state) => state.auth);
+  const { isLoading, error, isAuthenticated } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // If user becomes authenticated, redirect to dashboard
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     
     // Clear previous errors
     setFormError(null);
+    dispatch(clearError());
     
     // Validate passwords match
     if (password !== confirmPassword) {
@@ -31,11 +40,27 @@ const RegisterForm = () => {
       return;
     }
     
-    dispatch(registerUser({ displayName, email, password }));
+    console.log('Submitting registration form...');
+    dispatch(registerUser({ displayName, email, password }))
+      .unwrap()
+      .then(() => {
+        console.log('Registration successful!');
+      })
+      .catch((err) => {
+        console.error('Registration failed:', err);
+      });
   };
 
   const handleGoogleLogin = () => {
-    dispatch(loginWithGoogle());
+    console.log('Initiating Google login...');
+    dispatch(loginWithGoogle())
+      .unwrap()
+      .then(() => {
+        console.log('Google login successful!');
+      })
+      .catch((err) => {
+        console.error('Google login failed:', err);
+      });
   };
 
   return (
