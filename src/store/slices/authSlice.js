@@ -7,8 +7,9 @@ import {
   GoogleAuthProvider,
   signInWithPopup
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../../firebase/config';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db, usingLocalStorageMode } from '../../firebase/config';
+import { initializeUserDocument, updateUserLastLogin } from '../../firebase/dbInit';
 
 // Async thunks
 export const registerUser = createAsyncThunk(
@@ -27,35 +28,42 @@ export const registerUser = createAsyncThunk(
       });
       console.log('User profile updated successfully');
       
-      // Step 3: Create user document in Firestore
+      // Step 3: Create user document in Firestore using our utility function
       try {
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
-          uid: userCredential.user.uid,
+        const userData = await initializeUserDocument(
+          userCredential.user.uid,
           email,
-          displayName,
-          createdAt: new Date().toISOString(),
-          subscription: 'free', // Default subscription
-          usageMinutes: 0,
-          transcripts: []
-        });
+          displayName
+        );
         console.log('User document created in Firestore successfully');
+        
+        return {
+          uid: userCredential.user.uid,
+          email: userCredential.user.email,
+          displayName: userCredential.user.displayName,
+          subscription: userData.subscription,
+          usageMinutes: userData.usageMinutes,
+        };
       } catch (firestoreError) {
         console.error('Firestore document creation error:', firestoreError);
         // Still return the user since authentication was successful
         // but log the error for debugging
+        return {
+          uid: userCredential.user.uid,
+          email: userCredential.user.email,
+          displayName: userCredential.user.displayName,
+          subscription: 'free',
+          usageMinutes: 0,
+        };
       }
-      
-      return {
-        uid: userCredential.user.uid,
-        email: userCredential.user.email,
-        displayName: userCredential.user.displayName,
-      };
     } catch (error) {
       console.error('Registration error:', error.code, error.message);
       return rejectWithValue(
         error.code === 'auth/email-already-in-use' 
           ? 'This email is already in use. Please use a different email or try logging in.'
-          : error.message
+          : error.code === 'auth/network-request-failed'
+          ? 'Network error. Please check your internet connection.'
+          : error.message || 'Registration failed. Please try again.'
       );
     }
   }
@@ -67,24 +75,42 @@ export const loginUser = createAsyncThunk(
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
+      // Update last login timestamp
+      await updateUserLastLogin(userCredential.user.uid);
+      
       // Get user data from Firestore
       const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
       
-      if (!userDoc.exists()) {
-        throw new Error('User data not found');
+      let userData;
+      if (userDoc.exists()) {
+        userData = userDoc.data();
+      } else {
+        // Initialize user document if it doesn't exist
+        userData = await initializeUserDocument(
+          userCredential.user.uid,
+          email,
+          userCredential.user.displayName
+        );
       }
-      
-      const userData = userDoc.data();
       
       return {
         uid: userCredential.user.uid,
         email: userCredential.user.email,
-        displayName: userCredential.user.displayName,
+        displayName: userCredential.user.displayName || userData.displayName,
         subscription: userData.subscription,
         usageMinutes: userData.usageMinutes,
       };
     } catch (error) {
-      return rejectWithValue(error.message);
+      console.error('Login error:', error.code, error.message);
+      return rejectWithValue(
+        error.code === 'auth/user-not-found' 
+        ? 'User not found. Please check your email or register for a new account.'
+        : error.code === 'auth/wrong-password'
+        ? 'Incorrect password. Please try again.'
+        : error.code === 'auth/network-request-failed'
+        ? 'Network error. Please check your internet connection.'
+        : error.message || 'Login failed. Please try again.'
+      );
     }
   }
 );
@@ -93,40 +119,78 @@ export const loginWithGoogle = createAsyncThunk(
   'auth/googleLogin',
   async (_, { rejectWithValue }) => {
     try {
+      // In local storage mode, we can't actually use Google login
+      // Let's create a mock user instead
+      if (usingLocalStorageMode) {
+        console.log("Using mock Google login for local storage mode");
+        const mockGoogleUser = {
+          uid: 'google_user_' + Date.now(),
+          email: 'google_user@example.com',
+          displayName: 'Google User',
+          subscription: 'free',
+          usageMinutes: 0
+        };
+        
+        // Initialize the user document
+        await initializeUserDocument(
+          mockGoogleUser.uid,
+          mockGoogleUser.email,
+          mockGoogleUser.displayName
+        );
+        
+        return mockGoogleUser;
+      }
+      
+      // Regular Firebase Google auth
       const provider = new GoogleAuthProvider();
       const userCredential = await signInWithPopup(auth, provider);
       
-      // Check if user exists in Firestore
-      const userDocRef = doc(db, 'users', userCredential.user.uid);
-      const userDoc = await getDoc(userDocRef);
-      
-      if (!userDoc.exists()) {
-        // Create new user document if it doesn't exist
-        await setDoc(userDocRef, {
+      try {
+        // Update last login timestamp
+        await updateUserLastLogin(userCredential.user.uid);
+        
+        // Get or create user document
+        const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+        let userData;
+        
+        if (userDoc.exists()) {
+          userData = userDoc.data();
+        } else {
+          // Initialize user document if it doesn't exist
+          userData = await initializeUserDocument(
+            userCredential.user.uid,
+            userCredential.user.email,
+            userCredential.user.displayName
+          );
+        }
+        
+        return {
+          uid: userCredential.user.uid,
+          email: userCredential.user.email,
+          displayName: userCredential.user.displayName || userData.displayName,
+          subscription: userData.subscription,
+          usageMinutes: userData.usageMinutes,
+        };
+      } catch (dbError) {
+        console.error('Error with user document:', dbError);
+        // Return basic user info if database operations fail
+        return {
           uid: userCredential.user.uid,
           email: userCredential.user.email,
           displayName: userCredential.user.displayName,
-          createdAt: new Date().toISOString(),
-          subscription: 'free', // Default subscription
+          subscription: 'free',
           usageMinutes: 0,
-          transcripts: []
-        });
+        };
       }
-      
-      const userData = userDoc.exists() ? userDoc.data() : {
-        subscription: 'free',
-        usageMinutes: 0
-      };
-      
-      return {
-        uid: userCredential.user.uid,
-        email: userCredential.user.email,
-        displayName: userCredential.user.displayName,
-        subscription: userData.subscription,
-        usageMinutes: userData.usageMinutes,
-      };
     } catch (error) {
-      return rejectWithValue(error.message);
+      console.error('Google login error:', error.code, error.message);
+      return rejectWithValue(
+        error.code === 'auth/popup-closed-by-user'
+        ? 'Login was canceled. Please try again.'
+        : error.code === 'auth/network-request-failed'
+        ? 'Network error. Please check your internet connection.'
+        : error.message || 'Google login failed. Please try again.'
+      );
     }
   }
 );

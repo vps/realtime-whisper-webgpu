@@ -7,6 +7,7 @@ import { auth, db } from './firebase/config';
 import { setUser } from './store/slices/authSlice';
 import { getUserSubscription } from './store/slices/subscriptionSlice';
 import { setDarkMode } from './store/slices/uiSlice';
+import { initializeUserDocument, updateUserLastLogin } from './firebase/dbInit';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
@@ -38,15 +39,30 @@ function App() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         // User is signed in
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
+        try {
+          // Update last login timestamp
+          await updateUserLastLogin(user.uid);
+          
+          // Get or create user document
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          let userData;
+          
+          if (userDoc.exists()) {
+            userData = userDoc.data();
+          } else {
+            // Initialize user document if it doesn't exist
+            userData = await initializeUserDocument(
+              user.uid, 
+              user.email, 
+              user.displayName
+            );
+          }
+          
           dispatch(
             setUser({
               uid: user.uid,
               email: user.email,
-              displayName: user.displayName,
+              displayName: user.displayName || userData.displayName,
               subscription: userData.subscription || 'free',
               usageMinutes: userData.usageMinutes || 0,
             })
@@ -54,6 +70,8 @@ function App() {
           
           // Fetch user subscription details
           dispatch(getUserSubscription(user.uid));
+        } catch (error) {
+          console.error("Error handling user authentication:", error);
         }
       } else {
         // User is signed out
