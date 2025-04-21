@@ -15,23 +15,35 @@ export const registerUser = createAsyncThunk(
   'auth/register',
   async ({ email, password, displayName }, { rejectWithValue }) => {
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      console.log('Starting user registration process...');
       
-      // Update profile
+      // Step 1: Create user authentication
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      console.log('User authentication created successfully');
+      
+      // Step 2: Update profile
       await updateProfile(userCredential.user, {
         displayName
       });
+      console.log('User profile updated successfully');
       
-      // Create user document in Firestore
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        uid: userCredential.user.uid,
-        email,
-        displayName,
-        createdAt: new Date().toISOString(),
-        subscription: 'free', // Default subscription
-        usageMinutes: 0,
-        transcripts: []
-      });
+      // Step 3: Create user document in Firestore
+      try {
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          uid: userCredential.user.uid,
+          email,
+          displayName,
+          createdAt: new Date().toISOString(),
+          subscription: 'free', // Default subscription
+          usageMinutes: 0,
+          transcripts: []
+        });
+        console.log('User document created in Firestore successfully');
+      } catch (firestoreError) {
+        console.error('Firestore document creation error:', firestoreError);
+        // Still return the user since authentication was successful
+        // but log the error for debugging
+      }
       
       return {
         uid: userCredential.user.uid,
@@ -39,7 +51,12 @@ export const registerUser = createAsyncThunk(
         displayName: userCredential.user.displayName,
       };
     } catch (error) {
-      return rejectWithValue(error.message);
+      console.error('Registration error:', error.code, error.message);
+      return rejectWithValue(
+        error.code === 'auth/email-already-in-use' 
+          ? 'This email is already in use. Please use a different email or try logging in.'
+          : error.message
+      );
     }
   }
 );

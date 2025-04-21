@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { logoutUser } from '../store/slices/authSlice';
 import {
   Bars3Icon,
@@ -23,6 +23,7 @@ const MainLayout = () => {
   const { tier } = useSelector((state) => state.subscription);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Check if user is authenticated, if not redirect to login
   useEffect(() => {
@@ -36,69 +37,87 @@ const MainLayout = () => {
   };
 
   const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, current: true },
-    { name: 'Transcripts', href: '/transcripts', icon: DocumentTextIcon, current: false },
-    { name: 'Settings', href: '/settings', icon: CogIcon, current: false },
-    { name: 'Subscription', href: '/subscription', icon: CreditCardIcon, current: false },
+    { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
+    { name: 'Transcripts', href: '/transcripts', icon: DocumentTextIcon },
+    { name: 'Settings', href: '/settings', icon: CogIcon },
+    { name: 'Subscription', href: '/subscription', icon: CreditCardIcon },
   ];
 
+  // Function to check if a nav item is current/active
+  const isActive = (path) => {
+    if (path === '/dashboard' && location.pathname === '/dashboard') return true;
+    if (path === '/transcripts' && location.pathname.startsWith('/transcripts')) return true;
+    if (path === '/settings' && location.pathname === '/settings') return true;
+    if (path === '/subscription' && location.pathname === '/subscription') return true;
+    return false;
+  };
+
   return (
-    <div className="h-screen flex overflow-hidden bg-white dark:bg-gray-900">
-      {/* Mobile sidebar */}
+    <div className="h-screen flex overflow-hidden bg-white dark:bg-neutral-900">
+      {/* Mobile sidebar overlay */}
       <div
-        className={`fixed inset-0 z-40 flex md:hidden ${
-          sidebarOpen ? 'block' : 'hidden'
+        className={`fixed inset-0 z-40 bg-neutral-900/60 backdrop-blur-sm transition-opacity md:hidden ${
+          sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setSidebarOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* Mobile sidebar panel */}
+      <div
+        className={`fixed inset-y-0 left-0 z-40 w-full max-w-xs bg-white dark:bg-neutral-800 shadow-2xl transform transition-transform duration-300 ease-in-out md:hidden ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div
-          className="fixed inset-0 bg-gray-600 bg-opacity-75 transition-opacity"
-          onClick={() => setSidebarOpen(false)}
-        />
-
-        <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white dark:bg-gray-800">
-          <div className="absolute top-0 right-0 -mr-12 pt-2">
+        <div className="h-full flex flex-col">
+          {/* Close button */}
+          <div className="absolute top-0 right-0 pt-4 pr-4">
             <button
               type="button"
-              className="ml-1 flex items-center justify-center h-10 w-10 rounded-full focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
+              className="ml-1 flex items-center justify-center w-10 h-10 rounded-full text-neutral-400 hover:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
               onClick={() => setSidebarOpen(false)}
             >
               <span className="sr-only">Close sidebar</span>
-              <XMarkIcon className="h-6 w-6 text-white" aria-hidden="true" />
+              <XMarkIcon className="h-6 w-6" aria-hidden="true" />
             </button>
           </div>
 
-          <div className="mt-5 flex-1 h-0 overflow-y-auto">
-            <nav className="px-2 space-y-1">
-              <div className="flex items-center px-4 py-5">
-                <img src="/logo.png" className="h-8 w-auto mr-2" alt="Logo" />
-                <h1 className="text-2xl font-semibold text-blue-600 dark:text-blue-400">
-                  SpeechSync
-                </h1>
-              </div>
-              
-              <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mb-4">
-                <div className="flex items-center px-4 py-2">
-                  <UserCircleIcon className="h-8 w-8 text-gray-400" />
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-200">
-                      {user?.displayName || 'User'}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {tier.charAt(0).toUpperCase() + tier.slice(1)} Plan
-                    </p>
-                  </div>
+          {/* Logo */}
+          <div className="flex items-center px-6 py-8">
+            <img src="/logo.png" className="h-10 w-auto" alt="SpeechSync" />
+            <h1 className="ml-3 text-2xl font-semibold text-primary-600 dark:text-primary-400">
+              SpeechSync
+            </h1>
+          </div>
+
+          {/* User info */}
+          <div className="border-t border-neutral-100 dark:border-neutral-700 pt-6 mt-1 mb-6 px-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="h-12 w-12 rounded-full bg-gradient-primary flex items-center justify-center text-white">
+                  <UserCircleIcon className="h-8 w-8" />
                 </div>
               </div>
+              <div className="ml-4">
+                <p className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+                  {user?.displayName || 'User'}
+                </p>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                  {tier.charAt(0).toUpperCase() + tier.slice(1)} Plan
+                </p>
+              </div>
+            </div>
+          </div>
 
-              {navigation.map((item) => (
+          {/* Navigation */}
+          <nav className="flex-1 px-4 pb-4 space-y-1.5 overflow-y-auto">
+            {navigation.map((item) => {
+              const active = isActive(item.href);
+              return (
                 <a
                   key={item.name}
                   href={item.href}
-                  className={`group flex items-center px-2 py-2 text-base font-medium rounded-md ${
-                    item.current
-                      ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-                  }`}
+                  className={`nav-link flex items-center py-3 px-4 ${active ? 'nav-link-active' : ''}`}
                   onClick={(e) => {
                     e.preventDefault();
                     setSidebarOpen(false);
@@ -107,136 +126,150 @@ const MainLayout = () => {
                 >
                   <item.icon
                     className={`mr-4 h-6 w-6 ${
-                      item.current
-                        ? 'text-gray-500 dark:text-gray-300'
-                        : 'text-gray-400 dark:text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300'
+                      active
+                        ? 'text-primary-600 dark:text-primary-400'
+                        : 'text-neutral-400 dark:text-neutral-500'
                     }`}
                     aria-hidden="true"
                   />
-                  {item.name}
+                  <span>{item.name}</span>
                 </a>
-              ))}
-              
-              <button
-                onClick={() => dispatch(toggleDarkMode())}
-                className="w-full group flex items-center px-2 py-2 text-base font-medium rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
-              >
-                {darkMode ? (
-                  <SunIcon className="mr-4 h-6 w-6 text-gray-400 dark:text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300" />
-                ) : (
-                  <MoonIcon className="mr-4 h-6 w-6 text-gray-400 dark:text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300" />
-                )}
-                {darkMode ? 'Light Mode' : 'Dark Mode'}
-              </button>
-              
-              <button
-                onClick={handleLogout}
-                className="w-full group flex items-center px-2 py-2 text-base font-medium rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
-              >
-                <ArrowLeftOnRectangleIcon className="mr-4 h-6 w-6 text-gray-400 dark:text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300" />
-                Logout
-              </button>
-            </nav>
+              );
+            })}
+          </nav>
+
+          {/* Footer actions */}
+          <div className="border-t border-neutral-100 dark:border-neutral-700 p-4 space-y-2">
+            <button
+              onClick={() => dispatch(toggleDarkMode())}
+              className="w-full nav-link flex items-center py-3 px-4"
+            >
+              {darkMode ? (
+                <SunIcon className="mr-4 h-6 w-6 text-neutral-400 dark:text-neutral-500" />
+              ) : (
+                <MoonIcon className="mr-4 h-6 w-6 text-neutral-400 dark:text-neutral-500" />
+              )}
+              {darkMode ? 'Light Mode' : 'Dark Mode'}
+            </button>
+            
+            <button
+              onClick={handleLogout}
+              className="w-full nav-link flex items-center py-3 px-4 text-red-600 dark:text-red-400"
+            >
+              <ArrowLeftOnRectangleIcon className="mr-4 h-6 w-6" />
+              Logout
+            </button>
           </div>
         </div>
       </div>
 
       {/* Desktop sidebar */}
-      <div className="hidden md:flex md:flex-shrink-0">
-        <div className="flex flex-col w-64">
-          <div className="flex flex-col h-0 flex-1 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-            <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
-              <div className="flex items-center px-4">
-                <img src="/logo.png" className="h-8 w-auto mr-2" alt="Logo" />
-                <h1 className="text-2xl font-semibold text-blue-600 dark:text-blue-400">
-                  SpeechSync
-                </h1>
-              </div>
-              
-              <div className="border-t border-gray-200 dark:border-gray-700 mt-5 pt-4 mb-4">
-                <div className="flex items-center px-4 py-2">
-                  <UserCircleIcon className="h-8 w-8 text-gray-400" />
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-200">
-                      {user?.displayName || 'User'}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {tier.charAt(0).toUpperCase() + tier.slice(1)} Plan
-                    </p>
-                  </div>
+      <div className="hidden md:flex md:w-72 md:flex-col md:fixed md:inset-y-0">
+        <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-neutral-800 border-r border-neutral-100 dark:border-neutral-700">
+          {/* Logo */}
+          <div className="flex items-center h-24 flex-shrink-0 px-6">
+            <img src="/logo.png" className="h-10 w-auto" alt="SpeechSync" />
+            <h1 className="ml-3 text-2xl font-semibold text-primary-600 dark:text-primary-400">
+              SpeechSync
+            </h1>
+          </div>
+
+          {/* User info */}
+          <div className="border-t border-neutral-100 dark:border-neutral-700 pt-6 mt-1 mb-6 px-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="h-12 w-12 rounded-full bg-gradient-primary flex items-center justify-center text-white">
+                  <UserCircleIcon className="h-8 w-8" />
                 </div>
               </div>
-              
-              <nav className="mt-5 flex-1 px-2 space-y-1">
-                {navigation.map((item) => (
+              <div className="ml-4">
+                <p className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+                  {user?.displayName || 'User'}
+                </p>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                  {tier.charAt(0).toUpperCase() + tier.slice(1)} Plan
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Navigation */}
+          <div className="flex-1 flex flex-col justify-between">
+            <nav className="px-4 pb-4 space-y-1.5 overflow-y-auto">
+              {navigation.map((item) => {
+                const active = isActive(item.href);
+                return (
                   <a
                     key={item.name}
                     href={item.href}
-                    className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
-                      item.current
-                        ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
-                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-                    }`}
+                    className={`nav-link flex items-center py-3 px-4 ${active ? 'nav-link-active' : ''}`}
                     onClick={(e) => {
                       e.preventDefault();
                       navigate(item.href);
                     }}
                   >
                     <item.icon
-                      className={`mr-3 h-6 w-6 ${
-                        item.current
-                          ? 'text-gray-500 dark:text-gray-300'
-                          : 'text-gray-400 dark:text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300'
+                      className={`mr-4 h-6 w-6 ${
+                        active
+                          ? 'text-primary-600 dark:text-primary-400'
+                          : 'text-neutral-400 dark:text-neutral-500'
                       }`}
                       aria-hidden="true"
                     />
-                    {item.name}
+                    <span>{item.name}</span>
                   </a>
-                ))}
-                
-                <button
-                  onClick={() => dispatch(toggleDarkMode())}
-                  className="w-full group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
-                >
-                  {darkMode ? (
-                    <SunIcon className="mr-3 h-6 w-6 text-gray-400 dark:text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300" />
-                  ) : (
-                    <MoonIcon className="mr-3 h-6 w-6 text-gray-400 dark:text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300" />
-                  )}
-                  {darkMode ? 'Light Mode' : 'Dark Mode'}
-                </button>
-                
-                <button
-                  onClick={handleLogout}
-                  className="w-full group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
-                >
-                  <ArrowLeftOnRectangleIcon className="mr-3 h-6 w-6 text-gray-400 dark:text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300" />
-                  Logout
-                </button>
-              </nav>
+                );
+              })}
+            </nav>
+            
+            {/* Footer actions */}
+            <div className="border-t border-neutral-100 dark:border-neutral-700 p-4 space-y-2">
+              <button
+                onClick={() => dispatch(toggleDarkMode())}
+                className="w-full nav-link flex items-center py-3 px-4"
+              >
+                {darkMode ? (
+                  <SunIcon className="mr-4 h-6 w-6 text-neutral-400 dark:text-neutral-500" />
+                ) : (
+                  <MoonIcon className="mr-4 h-6 w-6 text-neutral-400 dark:text-neutral-500" />
+                )}
+                {darkMode ? 'Light Mode' : 'Dark Mode'}
+              </button>
+              
+              <button
+                onClick={handleLogout}
+                className="w-full nav-link flex items-center py-3 px-4 text-red-600 dark:text-red-400"
+              >
+                <ArrowLeftOnRectangleIcon className="mr-4 h-6 w-6" />
+                Logout
+              </button>
             </div>
           </div>
         </div>
       </div>
       
       {/* Main content */}
-      <div className="flex flex-col w-0 flex-1 overflow-hidden">
-        <div className="md:hidden pl-1 pt-1 sm:pl-3 sm:pt-3">
-          <button
-            type="button"
-            className="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <span className="sr-only">Open sidebar</span>
-            <Bars3Icon className="h-6 w-6" aria-hidden="true" />
-          </button>
+      <div className="flex flex-col flex-1 md:pl-72">
+        {/* Top bar for mobile */}
+        <div className="sticky top-0 z-10 md:hidden bg-white dark:bg-neutral-800 border-b border-neutral-100 dark:border-neutral-700">
+          <div className="flex items-center justify-between h-16 px-4">
+            <div className="flex items-center">
+              <button
+                type="button"
+                className="inline-flex items-center justify-center p-2 rounded-md text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <span className="sr-only">Open sidebar</span>
+                <Bars3Icon className="h-6 w-6" aria-hidden="true" />
+              </button>
+              <img src="/logo.png" className="h-8 w-auto ml-3" alt="SpeechSync" />
+            </div>
+          </div>
         </div>
         
-        <main className="flex-1 relative z-0 overflow-y-auto focus:outline-none">
-          <div className="py-6">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-              <Outlet />
-            </div>
+        <main className="flex-1 overflow-y-auto focus:outline-none">
+          <div className="py-8 px-4 max-w-7xl mx-auto sm:px-6 md:px-8">
+            <Outlet />
           </div>
         </main>
       </div>

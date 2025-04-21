@@ -1,32 +1,230 @@
+/* Import fonts for Apple-inspired typography */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    @apply font-sans;
+  }
+
+  body {
+    @apply text-neutral-900 dark:text-neutral-50 bg-white dark:bg-neutral-900;
+    @apply transition-colors duration-300 ease-in-out;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-medium tracking-tight;
+  }
+
+  h1 {
+    @apply text-4xl sm:text-5xl md:text-6xl;
+  }
+
+  h2 {
+    @apply text-3xl sm:text-4xl;
+  }
+
+  h3 {
+    @apply text-2xl sm:text-3xl;
+  }
+
+  /* Focus styles for a11y */
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary-500 ring-offset-2 ring-offset-white dark:ring-offset-neutral-900;
+  }
+}
+
+@layer components {
+  /* Modern button styles with consistent padding */
+  .btn {
+    @apply inline-flex items-center justify-center rounded-xl px-5 py-2.5 font-medium;
+    @apply transition-all duration-200 ease-in-out;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-600 text-white hover:bg-primary-700;
+    @apply dark:bg-primary-500 dark:hover:bg-primary-600;
+    @apply shadow-md hover:shadow-lg;
+  }
+
+  .btn-secondary {
+    @apply btn bg-white text-neutral-900 border border-neutral-200;
+    @apply hover:bg-neutral-50 dark:bg-neutral-800 dark:text-white dark:border-neutral-700;
+    @apply dark:hover:bg-neutral-700;
+  }
+
+  .btn-accent {
+    @apply btn bg-accent-600 text-white hover:bg-accent-700;
+    @apply dark:bg-accent-500 dark:hover:bg-accent-600;
+    @apply shadow-md hover:shadow-lg;
+  }
+
+  .btn-text {
+    @apply btn bg-transparent text-primary-600 hover:bg-primary-50;
+    @apply dark:text-primary-400 dark:hover:bg-neutral-800;
+    @apply p-0 shadow-none hover:shadow-none;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-lg;
+  }
+
+  /* Cards with refined shadows and spacing */
+  .card {
+    @apply bg-white dark:bg-neutral-800 rounded-2xl shadow-lg overflow-hidden;
+    @apply border border-neutral-100 dark:border-neutral-700;
+    @apply transition-all duration-300 ease-in-out;
+  }
+
+  .card-hover {
+    @apply hover:shadow-xl hover:-translate-y-1;
+  }
+
+  .card-body {
+    @apply p-6;
+  }
+
+  .card-header {
+    @apply px-6 py-4 border-b border-neutral-100 dark:border-neutral-700;
+  }
+
+  .card-footer {
+    @apply px-6 py-4 border-t border-neutral-100 dark:border-neutral-700;
+  }
+
+  /* Form controls */
+  .form-input {
+    @apply w-full rounded-xl border-neutral-300 dark:border-neutral-600;
+    @apply bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white;
+    @apply shadow-sm focus:border-primary-500 focus:ring-primary-500;
+    @apply placeholder:text-neutral-400 dark:placeholder:text-neutral-500;
+    @apply transition-all duration-200 ease-in-out;
+    @apply p-3;
+  }
+
+  .form-select {
+    @apply form-input appearance-none pr-10;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+  }
+
+  .form-checkbox {
+    @apply rounded-md text-primary-600 focus:ring-primary-500;
+    @apply transition-all duration-200 ease-in-out;
+    @apply border-neutral-300 dark:border-neutral-600;
+  }
+
+  .form-radio {
+    @apply text-primary-600 focus:ring-primary-500;
+    @apply transition-all duration-200 ease-in-out;
+    @apply border-neutral-300 dark:border-neutral-600;
+  }
+
+  .form-label {
+    @apply block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1;
+  }
+
+  .form-hint {
+    @apply mt-1 text-sm text-neutral-500 dark:text-neutral-400;
+  }
+
+  .form-error {
+    @apply mt-1 text-sm text-red-600 dark:text-red-400;
+  }
+
+  /* Navbar and navigation */
+  .nav-link {
+    @apply text-neutral-600 dark:text-neutral-300 hover:text-primary-600 dark:hover:text-primary-400;
+    @apply transition-colors duration-200 ease-in-out;
+    @apply p-2 rounded-lg;
+    @apply hover:bg-neutral-50 dark:hover:bg-neutral-800/50;
+  }
+
+  .nav-link-active {
+    @apply text-primary-600 dark:text-primary-400 font-medium;
+    @apply bg-primary-50 dark:bg-primary-900/20;
+  }
+
+  /* Stripe-inspired gradient backgrounds */
+  .bg-gradient-primary {
+    @apply bg-gradient-to-br from-primary-600 to-primary-800;
+  }
+
+  .bg-gradient-accent {
+    @apply bg-gradient-to-br from-accent-500 to-accent-700;
+  }
+
+  .bg-gradient-light {
+    @apply bg-gradient-to-br from-white to-neutral-100;
+    @apply dark:from-neutral-800 dark:to-neutral-900;
+  }
+}
+
 @layer utilities {
+  /* Scrollbar styling */
   .scrollbar-thin::-webkit-scrollbar {
     @apply w-2;
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {
-    @apply rounded-full bg-gray-100 dark:bg-gray-700;
+    @apply rounded-full bg-neutral-100 dark:bg-neutral-700;
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-gray-300 dark:bg-gray-600;
+    @apply rounded-full bg-neutral-300 dark:bg-neutral-600;
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-500;
+    @apply bg-neutral-500;
   }
 
-  .animation-delay-200 {
-    animation-delay: 200ms;
+  /* Text utilities */
+  .text-balance {
+    text-wrap: balance;
   }
-  .animation-delay-400 {
-    animation-delay: 400ms;
+
+  .text-pretty {
+    text-wrap: pretty;
   }
 
   .overflow-wrap-anywhere {
     overflow-wrap: anywhere;
+  }
+
+  /* Animation utilities */
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+  
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+
+  .animation-delay-600 {
+    animation-delay: 600ms;
+  }
+
+  /* Backdrop blur utilities */
+  .backdrop-blur-xs {
+    backdrop-filter: blur(2px);
+  }
+
+  /* Glass-morphism effect */
+  .bg-glass {
+    @apply bg-white/70 dark:bg-neutral-900/70 backdrop-blur-lg border border-white/20 dark:border-neutral-800/20;
   }
 }
