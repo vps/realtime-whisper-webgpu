@@ -1,0 +1,32 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Subscription Management
+
+The application includes a subscription system to manage different tiers of service.
+
+## Subscription Plans
+
+- Free tier with limited usage
+- Paid tiers with increased usage limits and features
+
+## Subscription Components
+
+- **Subscription Page**: [src/pages/SubscriptionPage.jsx](mdc:src/pages/SubscriptionPage.jsx) - Allows users to view and manage subscriptions
+- **Pricing Page**: [src/pages/PricingPage.jsx](mdc:src/pages/PricingPage.jsx) - Displays subscription options for new or upgrading users
+
+## State Management
+
+- **Subscription Slice**: [src/store/slices/subscriptionSlice.js](mdc:src/store/slices/subscriptionSlice.js) - Redux slice for subscription data
+  - Handles subscription status fetching
+  - Manages subscription plan changes
+  - Tracks usage limits and consumption
+
+## Usage Tracking
+
+The application tracks transcription usage:
+- Minutes of audio processed
+- Number of transcriptions created
+- Usage limits based on subscription tier

@@ -1,0 +1,27 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Whisper Model Integration
+
+This application uses the Hugging Face Transformers.js library to run the Whisper speech recognition model directly in the browser using WebGPU.
+
+## Key Components
+
+- **Worker Thread**: [src/worker.js](mdc:src/worker.js) - Handles model loading and inference in a separate thread
+  - Uses `AutomaticSpeechRecognitionPipeline` singleton pattern to manage model loading
+  - Processes audio data and returns transcriptions
+
+## Model Loading Process
+
+1. The worker loads the model on demand using `AutomaticSpeechRecognitionPipeline.getInstance()`
+2. The model is loaded with WebGPU optimizations
+3. A warm-up inference is performed to compile WebGPU shaders
+
+## Usage Flow
+
+1. Application sends audio data to the worker
+2. Worker processes audio through the Whisper model 
+3. Results are streamed back to the main thread as they become available
+4. Transcriptions are displayed and can be saved

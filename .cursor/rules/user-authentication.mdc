@@ -1,0 +1,34 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# User Authentication
+
+This application uses Firebase Authentication for user management.
+
+## Authentication Flow
+
+- **Login**: [src/pages/LoginPage.jsx](mdc:src/pages/LoginPage.jsx) - Handles user login
+- **Registration**: [src/pages/RegisterPage.jsx](mdc:src/pages/RegisterPage.jsx) - Handles new user registration
+- **Auth State**: [src/App.jsx](mdc:src/App.jsx) - Contains the auth state listener that updates the Redux store
+
+## Auth State Management
+
+- **Auth Slice**: [src/store/slices/authSlice.js](mdc:src/store/slices/authSlice.js) - Redux slice for authentication
+  - Manages user state, login, logout, and registration actions
+  - Stores user information and authentication status
+
+## Protected Routes
+
+The application uses React Router to manage protected routes:
+- Public routes are wrapped in `<PublicLayout />`
+- Protected routes are wrapped in `<MainLayout />` 
+- Redirects unauthenticated users to the login page
+
+## User Profile
+
+User data is stored in Firebase Firestore with the following information:
+- Basic profile information
+- Subscription details
+- Usage statistics

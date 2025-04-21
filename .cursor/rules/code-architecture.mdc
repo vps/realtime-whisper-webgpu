@@ -1,0 +1,37 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Code Architecture
+
+## Project Organization
+
+- **Pages**: [src/pages/](mdc:src/pages) - Main page components for different routes
+  - [HomePage.jsx](mdc:src/pages/HomePage.jsx) - Landing page
+  - [DashboardPage.jsx](mdc:src/pages/DashboardPage.jsx) - Main user dashboard with transcription functionality
+  - [TranscriptsPage.jsx](mdc:src/pages/TranscriptsPage.jsx) - Transcript history and management
+  - [SettingsPage.jsx](mdc:src/pages/SettingsPage.jsx) - User settings
+
+- **Layouts**: [src/layouts/](mdc:src/layouts) - Page layout components
+  - MainLayout - Protected routes layout
+  - PublicLayout - Public routes layout
+
+- **Components**: [src/components/](mdc:src/components) - Reusable UI components
+  - [AudioVisualizer.jsx](mdc:src/components/AudioVisualizer.jsx) - Visualizes audio input
+  - [LanguageSelector.jsx](mdc:src/components/LanguageSelector.jsx) - Language selection for transcription
+
+## State Management
+
+- **Redux Store**: [src/store/](mdc:src/store) - Redux store configuration
+  - [authSlice.js](mdc:src/store/slices/authSlice.js) - Authentication state
+  - [transcriptSlice.js](mdc:src/store/slices/transcriptSlice.js) - Transcript data management
+  - [subscriptionSlice.js](mdc:src/store/slices/subscriptionSlice.js) - User subscription state
+  - [uiSlice.js](mdc:src/store/slices/uiSlice.js) - UI state (dark mode, etc.)
+
+## Backend Integration
+
+- **Firebase**: [src/firebase/](mdc:src/firebase) - Firebase configuration and services
+  - [config.js](mdc:src/firebase/config.js) - Firebase initialization
+
+
