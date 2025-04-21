@@ -1,0 +1,21 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Realtime Whisper WebGPU
+
+This project is a web application for real-time speech recognition using the Whisper model running on WebGPU. It includes authentication, subscription management, and transcript handling.
+
+## Core Application Structure
+
+- Entry point: [src/main.jsx](mdc:src/main.jsx) - Initializes the React app with Redux and React Router
+- Main component: [src/App.jsx](mdc:src/App.jsx) - Contains the main routing structure and authentication logic
+- WebGPU Worker: [src/worker.js](mdc:src/worker.js) - WebWorker that handles the Whisper model loading and inference
+
+## Key Features
+
+- Real-time speech transcription using WebGPU acceleration
+- User authentication and account management
+- Subscription tiers with usage tracking
+- Transcript history and management
