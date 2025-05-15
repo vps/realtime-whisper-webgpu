@@ -79,37 +79,58 @@ class AutomaticSpeechRecognitionPipeline {
 
   static async getInstance(progress_callback = null) {
     try {
+      // Check if WebGPU is supported
+      if (!navigator.gpu) {
+        throw new Error("WebGPU is not supported in this browser. Please try a different browser like Chrome or Edge version 113 or later.");
+      }
+      
       // If model version has changed, reset everything
       if (this.model_id !== MODEL_VERSIONS[currentModelVersion]) {
         this.unload();
         this.model_id = MODEL_VERSIONS[currentModelVersion];
       }
       
-      this.tokenizer ??= AutoTokenizer.from_pretrained(this.model_id, {
-        progress_callback,
-      });
-      this.processor ??= AutoProcessor.from_pretrained(this.model_id, {
-        progress_callback,
-      });
-
-      this.model ??= WhisperForConditionalGeneration.from_pretrained(
-        this.model_id,
-        {
-          dtype: {
-            encoder_model: "fp32", // 'fp16' works too
-            decoder_model_merged: "q4", // or 'fp32' ('fp16' is broken)
-          },
-          device: "webgpu",
+      try {
+        this.tokenizer ??= await AutoTokenizer.from_pretrained(this.model_id, {
           progress_callback,
-        },
-      );
+        });
+      } catch (tokenError) {
+        console.error("Error loading tokenizer:", tokenError);
+        throw new Error(`Failed to load tokenizer: ${tokenError.message}`);
+      }
+      
+      try {
+        this.processor ??= await AutoProcessor.from_pretrained(this.model_id, {
+          progress_callback,
+        });
+      } catch (processorError) {
+        console.error("Error loading processor:", processorError);
+        throw new Error(`Failed to load processor: ${processorError.message}`);
+      }
 
-      return Promise.all([this.tokenizer, this.processor, this.model]);
+      try {
+        this.model ??= await WhisperForConditionalGeneration.from_pretrained(
+          this.model_id,
+          {
+            dtype: {
+              encoder_model: "fp32", // 'fp16' works too
+              decoder_model_merged: "q4", // or 'fp32' ('fp16' is broken)
+            },
+            device: "webgpu",
+            progress_callback,
+          },
+        );
+      } catch (modelError) {
+        console.error("Error loading model:", modelError);
+        throw new Error(`Failed to load model: ${modelError.message}`);
+      }
+
+      return [this.tokenizer, this.processor, this.model];
     } catch (error) {
       console.error("Error initializing pipeline:", error);
       self.postMessage({ 
         status: "error", 
-        message: "Failed to initialize speech recognition model" 
+        message: `Failed to initialize speech recognition model: ${error.message}` 
       });
       throw error;
     }
@@ -224,14 +245,14 @@ async function generate({ audio, language, reset = false }) {
     console.error("Error during generation:", error);
     self.postMessage({ 
       status: "error", 
-      message: "Failed to process speech. Please try again." 
+      message: `Failed to process speech: ${error.message}` 
     });
   } finally {
     processing = false;
   }
 }
 
-async function load(modelVersion = "base") {
+async function load(modelVersion = "base", retryCount = 0) {
   try {
     // Update the current model version
     if (modelVersion in MODEL_VERSIONS) {
@@ -257,19 +278,39 @@ async function load(modelVersion = "base") {
     });
 
     // Run model with dummy input to compile shaders
-    await model.generate({
-      input_features: full([1, 80, 3000], 0.0),
-      max_new_tokens: 1,
-    });
-    self.postMessage({ 
-      status: "ready",
-      modelVersion: currentModelVersion
-    });
+    try {
+      await model.generate({
+        input_features: full([1, 80, 3000], 0.0),
+        max_new_tokens: 1,
+      });
+      self.postMessage({ 
+        status: "ready",
+        modelVersion: currentModelVersion
+      });
+    } catch (warmupError) {
+      console.error("Error during model warmup:", warmupError);
+      throw new Error(`Model warmup failed: ${warmupError.message}`);
+    }
   } catch (error) {
     console.error("Error during model load:", error);
+    
+    // Retry up to 2 times with increasing delay
+    if (retryCount < 2) {
+      const retryDelay = (retryCount + 1) * 1500; // 1.5s, then 3s
+      self.postMessage({ 
+        status: "loading",
+        data: `Load failed, retrying in ${retryDelay/1000} seconds...`,
+      });
+      
+      setTimeout(() => {
+        load(modelVersion, retryCount + 1);
+      }, retryDelay);
+      return;
+    }
+    
     self.postMessage({ 
       status: "error", 
-      message: "Failed to load speech recognition model" 
+      message: `Failed to load speech recognition model: ${error.message}` 
     });
   }
 }
@@ -337,7 +378,7 @@ self.addEventListener("message", async (e) => {
     console.error("Error handling message:", error);
     self.postMessage({ 
       status: "error", 
-      message: "An unexpected error occurred" 
+      message: `An unexpected error occurred: ${error.message}` 
     });
   }
 });
