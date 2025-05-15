@@ -53,6 +53,52 @@ class AutomaticSpeechRecognitionPipeline {
   }
 }
 
+// Function to clean up transcription text
+function cleanTranscription(text) {
+  // Remove [BLANK_AUDIO] tokens
+  let cleaned = text.replace(/\[BLANK_AUDIO\]/g, "");
+  
+  // Remove multiple consecutive spaces
+  cleaned = cleaned.replace(/\s+/g, " ");
+  
+  // Trim leading/trailing whitespace
+  cleaned = cleaned.trim();
+  
+  return cleaned;
+}
+
+// Function to smartly merge transcription segments to avoid duplications
+function mergeTranscriptions(previous, current) {
+  if (!previous) return current;
+  if (!current) return previous;
+  
+  // Clean both segments
+  previous = cleanTranscription(previous);
+  current = cleanTranscription(current);
+  
+  if (!current) return previous;
+  
+  // Check if current is already contained in previous
+  if (previous.includes(current)) {
+    return previous;
+  }
+  
+  // Check for partial overlap
+  const words = current.split(" ");
+  if (words.length > 3) {
+    // Check if the first few words of current already appear at the end of previous
+    const overlapCheck = words.slice(0, 3).join(" ");
+    if (previous.endsWith(overlapCheck)) {
+      // Find where the overlap ends and only add the non-overlapping part
+      const overlapIndex = previous.lastIndexOf(overlapCheck);
+      return previous + " " + current.substring(overlapCheck.length).trim();
+    }
+  }
+  
+  // If no significant overlap, just concatenate with a space
+  return previous + " " + current;
+}
+
 let processing = false;
 async function generate({ audio, language, reset = false }) {
   if (processing) return;
@@ -89,17 +135,19 @@ async function generate({ audio, language, reset = false }) {
     
     let currentOutput = "";
     const callback_function = (output) => {
-      currentOutput = output;
-      // Combine with previous transcription for continuous context
-      const fullOutput = previousTranscription + " " + output;
-      
-      self.postMessage({
-        status: "update",
-        output: fullOutput.trim(),
-        currentSegment: output,
-        tps,
-        numTokens,
-      });
+      currentOutput = cleanTranscription(output);
+      if (currentOutput) {
+        // Combine with previous transcription for continuous context
+        const fullOutput = mergeTranscriptions(previousTranscription, currentOutput);
+        
+        self.postMessage({
+          status: "update",
+          output: fullOutput,
+          currentSegment: currentOutput,
+          tps,
+          numTokens,
+        });
+      }
     };
 
     const streamer = new TextStreamer(tokenizer, {
@@ -122,25 +170,30 @@ async function generate({ audio, language, reset = false }) {
       skip_special_tokens: true,
     });
 
-    // Update previous transcription for context
-    if (decoded && decoded.length > 0 && decoded[0].trim()) {
-      // Store the current segment in history
-      const timestamp = new Date().toISOString();
-      transcriptionHistory.push({
-        text: decoded[0].trim(),
-        timestamp,
-        language
-      });
+    // Clean and update the transcription
+    let finalSegment = "";
+    if (decoded && decoded.length > 0) {
+      finalSegment = cleanTranscription(decoded[0]);
       
-      // Update the continuous transcription
-      previousTranscription = (previousTranscription + " " + decoded[0]).trim();
+      if (finalSegment) {
+        // Store the current segment in history
+        const timestamp = new Date().toISOString();
+        transcriptionHistory.push({
+          text: finalSegment,
+          timestamp,
+          language
+        });
+        
+        // Update the continuous transcription
+        previousTranscription = mergeTranscriptions(previousTranscription, finalSegment);
+      }
     }
 
     // Send the output back to the main thread
     self.postMessage({
       status: "complete",
       output: previousTranscription,
-      currentSegment: decoded[0] || "",
+      currentSegment: finalSegment,
       history: transcriptionHistory,
     });
   } catch (error) {
