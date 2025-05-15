@@ -96,7 +96,28 @@ class AutomaticSpeechRecognitionPipeline {
         });
       } catch (tokenError) {
         console.error("Error loading tokenizer:", tokenError);
-        throw new Error(`Failed to load tokenizer: ${tokenError.message}`);
+        
+        // If we get an unauthorized access error with medium or small model, try base instead
+        if (tokenError.message && tokenError.message.includes("Unauthorized access") && 
+            (currentModelVersion === "medium" || currentModelVersion === "small")) {
+          
+          self.postMessage({
+            status: "info",
+            message: `Unauthorized access with ${currentModelVersion} model. Falling back to base model...`
+          });
+          
+          // Fall back to base model
+          currentModelVersion = "base";
+          this.unload();
+          this.model_id = MODEL_VERSIONS[currentModelVersion];
+          
+          // Try loading with base model
+          this.tokenizer = await AutoTokenizer.from_pretrained(this.model_id, {
+            progress_callback,
+          });
+        } else {
+          throw new Error(`Failed to load tokenizer: ${tokenError.message}`);
+        }
       }
       
       try {
@@ -257,6 +278,9 @@ async function load(modelVersion = "base", retryCount = 0) {
     // Update the current model version
     if (modelVersion in MODEL_VERSIONS) {
       currentModelVersion = modelVersion;
+    } else {
+      // If an invalid model version is specified, fall back to base
+      currentModelVersion = "base";
     }
     
     self.postMessage({
@@ -294,7 +318,31 @@ async function load(modelVersion = "base", retryCount = 0) {
   } catch (error) {
     console.error("Error during model load:", error);
     
-    // Retry up to 2 times with increasing delay
+    // If we're already using base model and still having issues, or if we've retried too many times
+    if ((currentModelVersion === "base" && retryCount >= 2) || retryCount >= 3) {
+      self.postMessage({ 
+        status: "error", 
+        message: `Failed to load speech recognition model: ${error.message}` 
+      });
+      return;
+    }
+    
+    // If we encounter an unauthorized access error with a larger model, try a smaller one
+    if (error.message && error.message.includes("Unauthorized access") && 
+        (currentModelVersion === "medium" || currentModelVersion === "small")) {
+      
+      const nextModel = currentModelVersion === "medium" ? "small" : "base";
+      self.postMessage({
+        status: "loading",
+        data: `Unauthorized access with ${currentModelVersion} model. Trying ${nextModel} model instead...`,
+      });
+      
+      // No delay needed for model downgrade
+      load(nextModel, retryCount);
+      return;
+    }
+    
+    // Otherwise retry with increasing delay
     if (retryCount < 2) {
       const retryDelay = (retryCount + 1) * 1500; // 1.5s, then 3s
       self.postMessage({ 
@@ -303,11 +351,26 @@ async function load(modelVersion = "base", retryCount = 0) {
       });
       
       setTimeout(() => {
-        load(modelVersion, retryCount + 1);
+        load(currentModelVersion, retryCount + 1);
       }, retryDelay);
       return;
     }
     
+    // If we've tried enough times with the current model, try a smaller one
+    if (currentModelVersion !== "base" && currentModelVersion !== "tiny") {
+      const nextModel = currentModelVersion === "medium" ? "small" : "base";
+      self.postMessage({
+        status: "loading",
+        data: `Failed to load ${currentModelVersion} model after multiple attempts. Trying ${nextModel} model instead...`,
+      });
+      
+      setTimeout(() => {
+        load(nextModel, 0); // Reset retry count for the new model
+      }, 1500);
+      return;
+    }
+    
+    // If all else fails
     self.postMessage({ 
       status: "error", 
       message: `Failed to load speech recognition model: ${error.message}` 

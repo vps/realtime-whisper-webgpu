@@ -11,6 +11,7 @@ export const ERROR_TYPES = {
   MODEL_PROCESSING: 'model_processing',
   FILE_UPLOAD: 'file_upload',
   BROWSER_SUPPORT: 'browser_support',
+  UNAUTHORIZED_ACCESS: 'unauthorized_access',
   UNKNOWN: 'unknown'
 };
 
@@ -23,6 +24,7 @@ export const ERROR_MESSAGES = {
   [ERROR_TYPES.MODEL_PROCESSING]: 'Error during speech recognition. Please try again.',
   [ERROR_TYPES.FILE_UPLOAD]: 'Failed to process the uploaded file. Please try a different file format.',
   [ERROR_TYPES.BROWSER_SUPPORT]: 'Your browser does not support all required features. Please try a modern browser like Chrome or Edge.',
+  [ERROR_TYPES.UNAUTHORIZED_ACCESS]: 'Unauthorized access to model files. Please try a different model size or check your internet connection.',
   [ERROR_TYPES.UNKNOWN]: 'An unexpected error occurred. Please refresh the page and try again.'
 };
 
@@ -63,6 +65,12 @@ export const RECOVERY_SUGGESTIONS = {
     'Try using Chrome (version 113+) or Edge (version 113+)',
     'Enable WebGPU in your browser settings if available'
   ],
+  [ERROR_TYPES.UNAUTHORIZED_ACCESS]: [
+    'Try a smaller model size (like "tiny" or "base")',
+    'Check your internet connection',
+    'Try disabling any content blockers or VPNs',
+    'Try reloading the page'
+  ],
   [ERROR_TYPES.UNKNOWN]: [
     'Refresh the page and try again',
     'Clear your browser cache',
@@ -91,6 +99,11 @@ export const getErrorDetails = (errorType) => {
  * @param {Object} context - Additional context information
  */
 export const logError = (errorType, error, context = {}) => {
+  // Check for specific error signatures
+  if (error && error.message && error.message.includes("Unauthorized access to file")) {
+    errorType = ERROR_TYPES.UNAUTHORIZED_ACCESS;
+  }
+  
   const errorDetails = getErrorDetails(errorType);
   
   console.error(
@@ -150,8 +163,10 @@ export const attemptRecovery = async (errorType) => {
       return false;
       
     case ERROR_TYPES.MODEL_LOADING:
-      // Could try clearing cache and reloading
-      return false;
+    case ERROR_TYPES.UNAUTHORIZED_ACCESS:
+      // For model loading issues, we'll try again with the same model
+      // The app has logic to fall back to a smaller model if needed
+      return true;
       
     default:
       // For other errors, simply returning true allows the app to try again
