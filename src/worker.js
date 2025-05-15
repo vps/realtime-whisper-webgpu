@@ -7,6 +7,9 @@ import {
 } from "@huggingface/transformers";
 
 const MAX_NEW_TOKENS = 64;
+// Store previous transcription context
+let previousTranscription = "";
+let transcriptionHistory = [];
 
 /**
  * This class uses the Singleton pattern to ensure that only one instance of the model is loaded.
@@ -51,9 +54,19 @@ class AutomaticSpeechRecognitionPipeline {
 }
 
 let processing = false;
-async function generate({ audio, language }) {
+async function generate({ audio, language, reset = false }) {
   if (processing) return;
   processing = true;
+
+  // Reset transcription context if requested
+  if (reset) {
+    previousTranscription = "";
+    transcriptionHistory = [];
+    self.postMessage({ 
+      status: "info", 
+      message: "Transcription context reset" 
+    });
+  }
 
   // Tell the main thread we are starting
   self.postMessage({ status: "start" });
@@ -73,10 +86,17 @@ async function generate({ audio, language }) {
         tps = (numTokens / (performance.now() - startTime)) * 1000;
       }
     };
+    
+    let currentOutput = "";
     const callback_function = (output) => {
+      currentOutput = output;
+      // Combine with previous transcription for continuous context
+      const fullOutput = previousTranscription + " " + output;
+      
       self.postMessage({
         status: "update",
-        output,
+        output: fullOutput.trim(),
+        currentSegment: output,
         tps,
         numTokens,
       });
@@ -102,10 +122,26 @@ async function generate({ audio, language }) {
       skip_special_tokens: true,
     });
 
+    // Update previous transcription for context
+    if (decoded && decoded.length > 0 && decoded[0].trim()) {
+      // Store the current segment in history
+      const timestamp = new Date().toISOString();
+      transcriptionHistory.push({
+        text: decoded[0].trim(),
+        timestamp,
+        language
+      });
+      
+      // Update the continuous transcription
+      previousTranscription = (previousTranscription + " " + decoded[0]).trim();
+    }
+
     // Send the output back to the main thread
     self.postMessage({
       status: "complete",
-      output: decoded,
+      output: previousTranscription,
+      currentSegment: decoded[0] || "",
+      history: transcriptionHistory,
     });
   } catch (error) {
     console.error("Error during generation:", error);
@@ -165,6 +201,25 @@ self.addEventListener("message", async (e) => {
 
       case "generate":
         generate(data);
+        break;
+        
+      case "reset":
+        previousTranscription = "";
+        transcriptionHistory = [];
+        self.postMessage({ 
+          status: "info", 
+          message: "Transcription context reset",
+          output: "",
+          history: []
+        });
+        break;
+        
+      case "getHistory":
+        self.postMessage({
+          status: "history",
+          history: transcriptionHistory,
+          output: previousTranscription
+        });
         break;
         
       default:

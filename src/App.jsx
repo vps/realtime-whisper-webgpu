@@ -6,6 +6,23 @@ import { LanguageSelector } from "./components/LanguageSelector";
 import { ActionButtons } from "./components/ActionButtons";
 import { BrowserCheck } from "./components/BrowserCheck";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { TranscriptionStatus } from "./components/TranscriptionStatus";
+import { TranscriptionHistory } from "./components/TranscriptionHistory";
+import { FileUpload } from "./components/FileUpload";
+import { ErrorMessage } from "./components/ErrorMessage";
+import { 
+  saveLanguagePreference, 
+  loadLanguagePreference,
+  saveAutoProcessPreference,
+  loadAutoProcessPreference,
+  saveTranscriptionHistory,
+  loadTranscriptionHistory
+} from "./utils/storage";
+import {
+  ERROR_TYPES,
+  logError,
+  attemptRecovery
+} from "./utils/errorHandler";
 
 const WHISPER_SAMPLING_RATE = 16_000;
 const MAX_AUDIO_LENGTH = 30; // seconds
@@ -24,8 +41,10 @@ function App() {
 
   // Inputs and outputs
   const [text, setText] = useState("");
+  const [currentSegment, setCurrentSegment] = useState("");
   const [tps, setTps] = useState(null);
-  const [language, setLanguage] = useState("en");
+  const [language, setLanguage] = useState(() => loadLanguagePreference());
+  const [transcriptionHistory, setTranscriptionHistory] = useState(() => loadTranscriptionHistory());
 
   // Processing
   const [recording, setRecording] = useState(false);
@@ -36,6 +55,48 @@ function App() {
   
   // Error handling
   const [error, setError] = useState(null);
+  const [errorType, setErrorType] = useState(ERROR_TYPES.UNKNOWN);
+  const [infoMessage, setInfoMessage] = useState(null);
+
+  // Auto-processing
+  const [autoProcess, setAutoProcess] = useState(() => loadAutoProcessPreference());
+  const processingTimeoutRef = useRef(null);
+  
+  // UI state
+  const [activeTab, setActiveTab] = useState("microphone"); // "microphone" or "file"
+  
+  // Recovery attempts
+  const [isRecovering, setIsRecovering] = useState(false);
+  
+  // Mobile viewport fix
+  useEffect(() => {
+    const setVh = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+    
+    setVh();
+    window.addEventListener('resize', setVh);
+    window.addEventListener('orientationchange', setVh);
+    
+    return () => {
+      window.removeEventListener('resize', setVh);
+      window.removeEventListener('orientationchange', setVh);
+    };
+  }, []);
+
+  // Save preferences when they change
+  useEffect(() => {
+    saveLanguagePreference(language);
+  }, [language]);
+
+  useEffect(() => {
+    saveAutoProcessPreference(autoProcess);
+  }, [autoProcess]);
+
+  useEffect(() => {
+    saveTranscriptionHistory(transcriptionHistory);
+  }, [transcriptionHistory]);
 
   // We use the `useEffect` hook to setup the worker as soon as the `App` component is mounted.
   useEffect(() => {
@@ -46,8 +107,9 @@ function App() {
           type: "module",
         });
       } catch (err) {
-        console.error("Failed to create worker:", err);
-        setError("Failed to initialize speech recognition worker");
+        const errorDetails = logError(ERROR_TYPES.UNKNOWN, err);
+        setError(errorDetails.message);
+        setErrorType(ERROR_TYPES.UNKNOWN);
         return;
       }
     }
@@ -87,7 +149,9 @@ function App() {
         case "ready":
           // Pipeline ready: the worker is ready to accept messages.
           setStatus("ready");
-          recorderRef.current?.start();
+          if (activeTab === "microphone") {
+            recorderRef.current?.start();
+          }
           break;
 
         case "start":
@@ -95,28 +159,64 @@ function App() {
             // Start generation
             setIsProcessing(true);
 
-            // Request new data from the recorder
-            recorderRef.current?.requestData();
+            // Request new data from the recorder if in microphone mode
+            if (activeTab === "microphone") {
+              recorderRef.current?.requestData();
+            }
           }
           break;
 
         case "update":
           {
             // Generation update: update the output text.
-            const { tps } = e.data;
+            const { tps, output, currentSegment } = e.data;
             setTps(tps);
+            setText(output || "");
+            if (currentSegment) {
+              setCurrentSegment(currentSegment);
+            }
           }
           break;
 
         case "complete":
           // Generation complete: re-enable the "Generate" button
           setIsProcessing(false);
-          setText(e.data.output);
+          setText(e.data.output || "");
+          if (e.data.currentSegment) {
+            setCurrentSegment(e.data.currentSegment);
+          }
+          if (e.data.history) {
+            setTranscriptionHistory(e.data.history);
+          }
           break;
           
         case "error":
-          setError(e.data.message || "An error occurred during processing");
+          const errorMessage = e.data.message || "An error occurred during processing";
+          const errorDetails = logError(ERROR_TYPES.MODEL_PROCESSING, new Error(errorMessage));
+          setError(errorDetails.message);
+          setErrorType(ERROR_TYPES.MODEL_PROCESSING);
           setIsProcessing(false);
+          break;
+          
+        case "info":
+          setInfoMessage(e.data.message);
+          if (e.data.output !== undefined) {
+            setText(e.data.output);
+          }
+          if (e.data.history !== undefined) {
+            setTranscriptionHistory(e.data.history);
+          }
+          // Auto-clear info messages after 3 seconds
+          setTimeout(() => setInfoMessage(null), 3000);
+          break;
+          
+        case "history":
+          if (e.data.history) {
+            setTranscriptionHistory(e.data.history);
+          }
+          if (e.data.output !== undefined) {
+            setText(e.data.output);
+          }
           break;
       }
     };
@@ -128,7 +228,7 @@ function App() {
     return () => {
       worker.current.removeEventListener("message", onMessageReceived);
     };
-  }, []);
+  }, [activeTab]);
 
   useEffect(() => {
     if (recorderRef.current) return; // Already set
@@ -164,112 +264,309 @@ function App() {
           };
           
           recorderRef.current.onerror = (event) => {
-            console.error("MediaRecorder error:", event);
-            setError("Error with audio recording");
+            const errorDetails = logError(ERROR_TYPES.AUDIO_RECORDING, event.error || new Error("MediaRecorder error"));
+            setError(errorDetails.message);
+            setErrorType(ERROR_TYPES.AUDIO_RECORDING);
             setRecording(false);
           };
+          
+          // Start recording if we're in microphone mode and model is ready
+          if (activeTab === "microphone" && status === "ready") {
+            recorderRef.current.start();
+          }
         })
         .catch((err) => {
-          console.error("The following error occurred: ", err);
-          setError("Could not access microphone. Please check permissions and try again.");
+          const errorDetails = logError(ERROR_TYPES.AUDIO_PERMISSION, err);
+          setError(errorDetails.message);
+          setErrorType(ERROR_TYPES.AUDIO_PERMISSION);
         });
     } else {
-      console.error("getUserMedia not supported on your browser!");
-      setError("Audio recording is not supported in your browser");
+      const errorDetails = logError(ERROR_TYPES.BROWSER_SUPPORT, new Error("getUserMedia not supported"));
+      setError(errorDetails.message);
+      setErrorType(ERROR_TYPES.BROWSER_SUPPORT);
     }
 
     return () => {
       recorderRef.current?.stop();
       recorderRef.current = null;
     };
-  }, []);
+  }, [activeTab, status]);
+
+  // Handle tab changes
+  useEffect(() => {
+    if (recorderRef.current) {
+      if (activeTab === "microphone" && status === "ready") {
+        recorderRef.current.start();
+      } else {
+        recorderRef.current.stop();
+      }
+    }
+  }, [activeTab, status]);
 
   useEffect(() => {
     if (!recorderRef.current) return;
     if (!recording) return;
     if (isProcessing) return;
     if (status !== "ready") return;
+    if (!autoProcess) return;
+    if (activeTab !== "microphone") return;
 
-    if (chunks.length > 0) {
-      // Generate from data
-      const blob = new Blob(chunks, { type: recorderRef.current.mimeType });
-
-      const fileReader = new FileReader();
-
-      fileReader.onloadend = async () => {
-        try {
-          const arrayBuffer = fileReader.result;
-          const decoded = await audioContextRef.current.decodeAudioData(arrayBuffer);
-          let audio = decoded.getChannelData(0);
-          if (audio.length > MAX_SAMPLES) {
-            // Get last MAX_SAMPLES
-            audio = audio.slice(-MAX_SAMPLES);
-          }
-
-          worker.current.postMessage({
-            type: "generate",
-            data: { audio, language },
-          });
-        } catch (err) {
-          console.error("Audio processing error:", err);
-          setError("Failed to process audio");
-        }
-      };
-      
-      fileReader.onerror = () => {
-        setError("Failed to read audio data");
-      };
-      
-      fileReader.readAsArrayBuffer(blob);
-    } else {
-      recorderRef.current?.requestData();
+    // Clear any existing timeout
+    if (processingTimeoutRef.current) {
+      clearTimeout(processingTimeoutRef.current);
     }
-  }, [status, recording, isProcessing, chunks, language]);
+
+    // Set a timeout to process audio after a short delay
+    // This helps to batch audio chunks for more efficient processing
+    processingTimeoutRef.current = setTimeout(() => {
+      if (chunks.length > 0) {
+        processAudioChunks();
+      } else {
+        recorderRef.current?.requestData();
+      }
+    }, 500); // 500ms delay for batching
+
+    return () => {
+      if (processingTimeoutRef.current) {
+        clearTimeout(processingTimeoutRef.current);
+      }
+    };
+  }, [status, recording, isProcessing, chunks, language, autoProcess, activeTab]);
+
+  const processAudioChunks = async () => {
+    if (chunks.length === 0) return;
+    
+    // Generate from data
+    const blob = new Blob(chunks, { type: recorderRef.current.mimeType });
+
+    const fileReader = new FileReader();
+
+    fileReader.onloadend = async () => {
+      try {
+        const arrayBuffer = fileReader.result;
+        const decoded = await audioContextRef.current.decodeAudioData(arrayBuffer);
+        let audio = decoded.getChannelData(0);
+        if (audio.length > MAX_SAMPLES) {
+          // Get last MAX_SAMPLES
+          audio = audio.slice(-MAX_SAMPLES);
+        }
+
+        worker.current.postMessage({
+          type: "generate",
+          data: { audio, language },
+        });
+      } catch (err) {
+        const errorDetails = logError(ERROR_TYPES.AUDIO_PROCESSING, err);
+        setError(errorDetails.message);
+        setErrorType(ERROR_TYPES.AUDIO_PROCESSING);
+      }
+    };
+    
+    fileReader.onerror = (err) => {
+      const errorDetails = logError(ERROR_TYPES.AUDIO_PROCESSING, err || new Error("Failed to read audio data"));
+      setError(errorDetails.message);
+      setErrorType(ERROR_TYPES.AUDIO_PROCESSING);
+    };
+    
+    fileReader.readAsArrayBuffer(blob);
+  };
 
   const handleReset = () => {
     setText("");
-    if (recorderRef.current) {
+    setCurrentSegment("");
+    if (worker.current) {
+      worker.current.postMessage({ type: "reset" });
+    }
+    if (recorderRef.current && activeTab === "microphone") {
       recorderRef.current.stop();
       recorderRef.current.start();
     }
   };
 
+  const toggleAutoProcess = () => {
+    setAutoProcess(!autoProcess);
+  };
+
+  const handleManualProcess = () => {
+    if (activeTab === "microphone" && chunks.length > 0) {
+      processAudioChunks();
+    }
+  };
+  
+  const handleClearHistory = () => {
+    setTranscriptionHistory([]);
+    if (worker.current) {
+      worker.current.postMessage({ type: "reset" });
+    }
+    setText("");
+    setCurrentSegment("");
+  };
+  
+  const handleFileSelected = async (file) => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext({
+        sampleRate: WHISPER_SAMPLING_RATE,
+      });
+    }
+    
+    try {
+      setIsProcessing(true);
+      setInfoMessage("Processing audio file...");
+      
+      const arrayBuffer = await file.arrayBuffer();
+      const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+      
+      // Get the audio data
+      let audio = audioBuffer.getChannelData(0);
+      
+      // If the audio is too long, we'll process it in chunks
+      const chunkDuration = MAX_AUDIO_LENGTH; // in seconds
+      const chunkSamples = chunkDuration * WHISPER_SAMPLING_RATE;
+      
+      // Reset transcription context
+      worker.current.postMessage({ type: "reset" });
+      
+      if (audio.length <= chunkSamples) {
+        // Process the entire file at once
+        worker.current.postMessage({
+          type: "generate",
+          data: { audio, language },
+        });
+      } else {
+        // Process the file in chunks
+        setInfoMessage("Audio file is long, processing in chunks...");
+        
+        const totalChunks = Math.ceil(audio.length / chunkSamples);
+        
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * chunkSamples;
+          const end = Math.min(start + chunkSamples, audio.length);
+          const chunk = audio.slice(start, end);
+          
+          setInfoMessage(`Processing chunk ${i + 1}/${totalChunks}...`);
+          
+          // Process this chunk
+          await new Promise((resolve) => {
+            const messageHandler = (e) => {
+              if (e.data.status === "complete") {
+                worker.current.removeEventListener("message", messageHandler);
+                resolve();
+              }
+            };
+            
+            worker.current.addEventListener("message", messageHandler);
+            
+            worker.current.postMessage({
+              type: "generate",
+              data: { audio: chunk, language },
+            });
+          });
+        }
+        
+        setInfoMessage("Finished processing audio file");
+      }
+    } catch (err) {
+      const errorDetails = logError(ERROR_TYPES.FILE_UPLOAD, err);
+      setError(errorDetails.message);
+      setErrorType(ERROR_TYPES.FILE_UPLOAD);
+      setIsProcessing(false);
+    }
+  };
+  
+  const handleRetry = async () => {
+    setIsRecovering(true);
+    
+    // Clear error state
+    setError(null);
+    
+    // Attempt recovery based on error type
+    const recoverySuccessful = await attemptRecovery(errorType);
+    
+    if (recoverySuccessful) {
+      // If recovery was successful, restart the appropriate processes
+      if (errorType === ERROR_TYPES.MODEL_LOADING) {
+        // Try loading the model again
+        if (worker.current) {
+          worker.current.postMessage({ type: "load" });
+          setStatus("loading");
+        }
+      } else if (errorType === ERROR_TYPES.AUDIO_PERMISSION || errorType === ERROR_TYPES.AUDIO_RECORDING) {
+        // Try reinitializing audio
+        recorderRef.current = null;
+        setStream(null);
+        
+        try {
+          const newStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          setStream(newStream);
+          
+          recorderRef.current = new MediaRecorder(newStream);
+          if (activeTab === "microphone" && status === "ready") {
+            recorderRef.current.start();
+          }
+        } catch (err) {
+          const errorDetails = logError(ERROR_TYPES.AUDIO_PERMISSION, err);
+          setError(errorDetails.message);
+          setErrorType(ERROR_TYPES.AUDIO_PERMISSION);
+        }
+      }
+    } else {
+      // If recovery failed, show a more specific error message
+      setError(`Recovery failed. ${errorType === ERROR_TYPES.BROWSER_SUPPORT ? 
+        "Please try a different browser." : 
+        "Please try refreshing the page."}`);
+    }
+    
+    setIsRecovering(false);
+  };
+
   return (
     <ErrorBoundary>
       <BrowserCheck />
-      <div className="flex flex-col h-screen mx-auto justify-end text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-900">
+      <div className="flex flex-col h-screen h-screen-dynamic mx-auto justify-end text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-900">
         {
           <div className="h-full overflow-auto scrollbar-thin flex justify-center items-center flex-col relative">
-            <div className="flex flex-col items-center mb-1 max-w-[400px] text-center">
+            <div className="flex flex-col items-center mb-1 max-w-[400px] text-center px-4 sm:px-0">
               <img
                 src="logo.png"
                 width="50%"
                 height="auto"
-                className="block"
+                className="block max-w-[150px] sm:max-w-none"
                 alt="Whisper WebGPU Logo"
               ></img>
-              <h1 className="text-4xl font-bold mb-1">Whisper WebGPU</h1>
-              <h2 className="text-xl font-semibold">
+              <h1 className="text-3xl sm:text-4xl font-bold mb-1">Whisper WebGPU</h1>
+              <h2 className="text-lg sm:text-xl font-semibold">
                 Real-time in-browser speech recognition
               </h2>
             </div>
 
-            <div className="flex flex-col items-center px-4">
+            <div className="flex flex-col items-center px-2 sm:px-4 w-full max-w-[600px]">
               {error && (
-                <div className="mb-4 p-3 bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300 rounded-lg">
-                  <p className="font-medium">Error: {error}</p>
-                  <button 
-                    className="mt-2 px-3 py-1 bg-red-200 dark:bg-red-800 rounded" 
-                    onClick={() => setError(null)}
-                  >
-                    Dismiss
-                  </button>
+                <ErrorMessage 
+                  message={error}
+                  type={errorType}
+                  onDismiss={() => setError(null)}
+                  onRetry={handleRetry}
+                />
+              )}
+              
+              {infoMessage && (
+                <div className="mb-4 p-3 bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300 rounded-lg w-full">
+                  <p className="font-medium">{infoMessage}</p>
+                </div>
+              )}
+              
+              {isRecovering && (
+                <div className="mb-4 p-3 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300 rounded-lg w-full">
+                  <div className="flex items-center">
+                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-yellow-500 rounded-full border-t-transparent"></div>
+                    <p className="font-medium">Attempting to recover...</p>
+                  </div>
                 </div>
               )}
             
               {status === null && (
                 <>
-                  <p className="max-w-[480px] mb-4">
+                  <p className="max-w-[480px] mb-4 px-4 text-sm sm:text-base">
                     <br />
                     You are about to load{" "}
                     <a
@@ -307,51 +604,129 @@ function App() {
                         worker.current.postMessage({ type: "load" });
                         setStatus("loading");
                       } catch (err) {
-                        console.error("Failed to load model:", err);
-                        setError("Failed to initiate model loading");
+                        const errorDetails = logError(ERROR_TYPES.MODEL_LOADING, err);
+                        setError(errorDetails.message);
+                        setErrorType(ERROR_TYPES.MODEL_LOADING);
                       }
                     }}
-                    disabled={status !== null}
+                    disabled={status !== null || isRecovering}
                   >
                     Load model
                   </button>
                 </>
               )}
 
-              <div className="w-full max-w-[500px] p-2">
-                <AudioVisualizer className="w-full rounded-lg" stream={stream} />
-                {status === "ready" && (
-                  <div className="relative">
-                    <p className="w-full h-[80px] overflow-y-auto overflow-wrap-anywhere border rounded-lg p-2">
-                      {text}
-                    </p>
-                    {tps && (
-                      <span className="absolute bottom-0 right-0 px-1">
-                        {tps.toFixed(2)} tok/s
-                      </span>
-                    )}
-                    <ActionButtons text={text} onReset={handleReset} />
+              {status === "ready" && (
+                <div className="w-full mb-4">
+                  <div className="flex border-b border-gray-200 dark:border-gray-700">
+                    <button
+                      className={`py-2 px-4 text-sm sm:text-base ${
+                        activeTab === "microphone"
+                          ? "border-b-2 border-blue-500 font-medium"
+                          : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                      }`}
+                      onClick={() => setActiveTab("microphone")}
+                    >
+                      Microphone
+                    </button>
+                    <button
+                      className={`py-2 px-4 text-sm sm:text-base ${
+                        activeTab === "file"
+                          ? "border-b-2 border-blue-500 font-medium"
+                          : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                      }`}
+                      onClick={() => setActiveTab("file")}
+                    >
+                      Upload File
+                    </button>
                   </div>
+                </div>
+              )}
+
+              <div className="w-full max-w-[600px] p-2">
+                {activeTab === "microphone" && status === "ready" && (
+                  <AudioVisualizer className="w-full rounded-lg" stream={stream} />
+                )}
+                
+                {activeTab === "file" && status === "ready" && (
+                  <FileUpload 
+                    onFileSelected={handleFileSelected}
+                    isProcessing={isProcessing}
+                  />
+                )}
+                
+                {status === "ready" && (
+                  <>
+                    <TranscriptionStatus 
+                      isProcessing={isProcessing} 
+                      recording={recording && activeTab === "microphone"} 
+                      status={status} 
+                    />
+                    
+                    <div className="relative">
+                      <div className="w-full min-h-[80px] max-h-[150px] sm:max-h-[200px] overflow-y-auto overflow-wrap-anywhere border rounded-lg p-2 mb-2 text-sm sm:text-base">
+                        {text}
+                        {isProcessing && (
+                          <span className="inline-block animate-pulse">▌</span>
+                        )}
+                      </div>
+                      
+                      {currentSegment && (
+                        <div className="w-full border-t border-gray-200 dark:border-gray-700 pt-2 mb-2">
+                          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Current segment:</p>
+                          <p className="text-xs sm:text-sm">{currentSegment}</p>
+                        </div>
+                      )}
+                      
+                      {tps && (
+                        <span className="absolute bottom-0 right-0 px-1 text-xs text-gray-500">
+                          {tps.toFixed(2)} tok/s
+                        </span>
+                      )}
+                      
+                      <ActionButtons 
+                        text={text} 
+                        onReset={handleReset} 
+                        autoProcess={autoProcess}
+                        onToggleAutoProcess={toggleAutoProcess}
+                        onManualProcess={handleManualProcess}
+                        isProcessing={isProcessing}
+                      />
+                    </div>
+                  </>
                 )}
               </div>
+              
               {status === "ready" && (
-                <div className="relative w-full max-w-[500px] flex justify-center items-center mt-2">
+                <div className="relative w-full max-w-[600px] flex justify-center items-center mt-2">
                   <div className="flex items-center space-x-2">
-                    <span className="text-sm">Language:</span>
+                    <span className="text-xs sm:text-sm">Language:</span>
                     <LanguageSelector
                       language={language}
                       setLanguage={(e) => {
-                        recorderRef.current?.stop();
+                        if (activeTab === "microphone" && recorderRef.current) {
+                          recorderRef.current.stop();
+                        }
                         setLanguage(e);
-                        recorderRef.current?.start();
+                        if (activeTab === "microphone" && recorderRef.current) {
+                          recorderRef.current.start();
+                        }
                       }}
                     />
                   </div>
                 </div>
               )}
+              
+              {status === "ready" && transcriptionHistory.length > 0 && (
+                <TranscriptionHistory 
+                  history={transcriptionHistory}
+                  onClearHistory={handleClearHistory}
+                />
+              )}
+              
               {status === "loading" && (
                 <div className="w-full max-w-[500px] text-left mx-auto p-4">
-                  <p className="text-center">{loadingMessage}</p>
+                  <p className="text-center text-sm sm:text-base">{loadingMessage}</p>
                   {progressItems.map(({ file, progress, total }, i) => (
                     <Progress
                       key={i}

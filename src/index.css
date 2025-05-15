@@ -30,3 +30,58 @@
     overflow-wrap: anywhere;
   }
 }
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  html, body {
+    overscroll-behavior: none;
+    overflow-x: hidden;
+  }
+  
+  .mobile-full-height {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+  }
+  
+  .mobile-padding {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+  
+  .mobile-small-text {
+    font-size: 0.875rem;
+  }
+}
+
+/* Fix for iOS height issues */
+:root {
+  --vh: 1vh;
+}
+
+.h-screen-dynamic {
+  height: 100vh;
+  height: calc(var(--vh, 1vh) * 100);
+}
+
+/* Dark mode improvements */
+.dark .dark-mode-improvements {
+  background-color: rgba(17, 24, 39, 1);
+  color: rgba(229, 231, 235, 1);
+}
+
+/* Accessibility improvements */
+:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Improve tap targets on mobile */
+@media (max-width: 640px) {
+  button, 
+  select,
+  input[type="button"],
+  input[type="submit"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
