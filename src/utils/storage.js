@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   LANGUAGE: 'whisper-webgpu-language',
   AUTO_PROCESS: 'whisper-webgpu-auto-process',
   TRANSCRIPTION_HISTORY: 'whisper-webgpu-history',
+  MODEL_PREFERENCE: 'whisper-webgpu-model',
 };
 
 /**
@@ -91,6 +92,22 @@ export const saveTranscriptionHistory = (history) => {
  */
 export const loadTranscriptionHistory = () => {
   return loadFromStorage(STORAGE_KEYS.TRANSCRIPTION_HISTORY, []);
+};
+
+/**
+ * Save model preference
+ * @param {string} model - Model version (tiny, base, small, medium)
+ */
+export const saveModelPreference = (model) => {
+  return saveToStorage(STORAGE_KEYS.MODEL_PREFERENCE, model);
+};
+
+/**
+ * Load model preference
+ * @returns {string} Model version or default 'base'
+ */
+export const loadModelPreference = () => {
+  return loadFromStorage(STORAGE_KEYS.MODEL_PREFERENCE, 'base');
 };
 
 /**

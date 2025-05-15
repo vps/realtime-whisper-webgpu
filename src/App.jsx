@@ -10,13 +10,16 @@ import { TranscriptionStatus } from "./components/TranscriptionStatus";
 import { TranscriptionHistory } from "./components/TranscriptionHistory";
 import { FileUpload } from "./components/FileUpload";
 import { ErrorMessage } from "./components/ErrorMessage";
+import { ModelSelector } from "./components/ModelSelector";
 import { 
   saveLanguagePreference, 
   loadLanguagePreference,
   saveAutoProcessPreference,
   loadAutoProcessPreference,
   saveTranscriptionHistory,
-  loadTranscriptionHistory
+  loadTranscriptionHistory,
+  saveModelPreference,
+  loadModelPreference
 } from "./utils/storage";
 import {
   ERROR_TYPES,
@@ -68,6 +71,11 @@ function App() {
   // Recovery attempts
   const [isRecovering, setIsRecovering] = useState(false);
   
+  // Model selection
+  const [availableModels, setAvailableModels] = useState(["tiny", "base", "small", "medium"]);
+  const [currentModel, setCurrentModel] = useState(() => loadModelPreference());
+  const [modelChanging, setModelChanging] = useState(false);
+  
   // Mobile viewport fix
   useEffect(() => {
     const setVh = () => {
@@ -97,6 +105,10 @@ function App() {
   useEffect(() => {
     saveTranscriptionHistory(transcriptionHistory);
   }, [transcriptionHistory]);
+  
+  useEffect(() => {
+    saveModelPreference(currentModel);
+  }, [currentModel]);
 
   // We use the `useEffect` hook to setup the worker as soon as the `App` component is mounted.
   useEffect(() => {
@@ -149,6 +161,10 @@ function App() {
         case "ready":
           // Pipeline ready: the worker is ready to accept messages.
           setStatus("ready");
+          setModelChanging(false);
+          if (e.data.modelVersion) {
+            setCurrentModel(e.data.modelVersion);
+          }
           if (activeTab === "microphone") {
             recorderRef.current?.start();
           }
@@ -196,6 +212,7 @@ function App() {
           setError(errorDetails.message);
           setErrorType(ERROR_TYPES.MODEL_PROCESSING);
           setIsProcessing(false);
+          setModelChanging(false);
           break;
           
         case "info":
@@ -216,6 +233,15 @@ function App() {
           }
           if (e.data.output !== undefined) {
             setText(e.data.output);
+          }
+          break;
+          
+        case "models":
+          if (e.data.models) {
+            setAvailableModels(e.data.models);
+          }
+          if (e.data.currentModel) {
+            setCurrentModel(e.data.currentModel);
           }
           break;
       }
@@ -487,7 +513,10 @@ function App() {
       if (errorType === ERROR_TYPES.MODEL_LOADING) {
         // Try loading the model again
         if (worker.current) {
-          worker.current.postMessage({ type: "load" });
+          worker.current.postMessage({ 
+            type: "load",
+            data: { modelVersion: currentModel }
+          });
           setStatus("loading");
         }
       } else if (errorType === ERROR_TYPES.AUDIO_PERMISSION || errorType === ERROR_TYPES.AUDIO_RECORDING) {
@@ -517,6 +546,29 @@ function App() {
     }
     
     setIsRecovering(false);
+  };
+  
+  const handleModelChange = (modelVersion) => {
+    if (modelVersion === currentModel) return;
+    
+    setModelChanging(true);
+    setText("");
+    setCurrentSegment("");
+    setChunks([]);
+    
+    // Stop recording if active
+    if (recorderRef.current && recording) {
+      recorderRef.current.stop();
+    }
+    
+    // Reset transcription context
+    if (worker.current) {
+      worker.current.postMessage({ type: "reset" });
+      worker.current.postMessage({ 
+        type: "changeModel", 
+        data: { modelVersion } 
+      });
+    }
   };
 
   return (
@@ -563,45 +615,47 @@ function App() {
                   </div>
                 </div>
               )}
+              
+              {modelChanging && (
+                <div className="mb-4 p-3 bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300 rounded-lg w-full">
+                  <div className="flex items-center">
+                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-blue-500 rounded-full border-t-transparent"></div>
+                    <p className="font-medium">Changing model... This may take a moment.</p>
+                  </div>
+                </div>
+              )}
             
               {status === null && (
                 <>
                   <p className="max-w-[480px] mb-4 px-4 text-sm sm:text-base">
                     <br />
-                    You are about to load{" "}
-                    <a
-                      href="https://huggingface.co/onnx-community/whisper-base"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-medium underline"
-                    >
-                      whisper-base
-                    </a>
-                    , a 73 million parameter speech recognition model that is
+                    You are about to load a Whisper speech recognition model that is
                     optimized for inference on the web. Once downloaded, the model
-                    (~200&nbsp;MB) will be cached and reused when you revisit the
-                    page.
+                    will be cached and reused when you revisit the page.
                     <br />
                     <br />
-                    Everything runs directly in your browser using{" "}
-                    <a
-                      href="https://huggingface.co/docs/transformers.js"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline"
-                    >
-                      🤗&nbsp;Transformers.js
-                    </a>{" "}
-                    and ONNX Runtime Web, meaning no data is sent to a server. You
-                    can even disconnect from the internet after the model has
-                    loaded!
+                    Choose a model size:
+                    <br />
+                    <span className="text-xs text-gray-600 dark:text-gray-400">
+                      Larger models provide better accuracy but require more resources and time to load.
+                    </span>
                   </p>
+                  
+                  <ModelSelector 
+                    currentModel={currentModel}
+                    availableModels={availableModels}
+                    onModelChange={setCurrentModel}
+                    disabled={false}
+                  />
 
                   <button
-                    className="border px-4 py-2 rounded-lg bg-blue-400 text-white hover:bg-blue-500 disabled:bg-blue-100 disabled:cursor-not-allowed select-none"
+                    className="border px-4 py-2 rounded-lg bg-blue-400 text-white hover:bg-blue-500 disabled:bg-blue-100 disabled:cursor-not-allowed select-none mt-2"
                     onClick={() => {
                       try {
-                        worker.current.postMessage({ type: "load" });
+                        worker.current.postMessage({ 
+                          type: "load",
+                          data: { modelVersion: currentModel }
+                        });
                         setStatus("loading");
                       } catch (err) {
                         const errorDetails = logError(ERROR_TYPES.MODEL_LOADING, err);
@@ -617,30 +671,43 @@ function App() {
               )}
 
               {status === "ready" && (
-                <div className="w-full mb-4">
-                  <div className="flex border-b border-gray-200 dark:border-gray-700">
-                    <button
-                      className={`py-2 px-4 text-sm sm:text-base ${
-                        activeTab === "microphone"
-                          ? "border-b-2 border-blue-500 font-medium"
-                          : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                      }`}
-                      onClick={() => setActiveTab("microphone")}
-                    >
-                      Microphone
-                    </button>
-                    <button
-                      className={`py-2 px-4 text-sm sm:text-base ${
-                        activeTab === "file"
-                          ? "border-b-2 border-blue-500 font-medium"
-                          : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                      }`}
-                      onClick={() => setActiveTab("file")}
-                    >
-                      Upload File
-                    </button>
+                <>
+                  <div className="w-full mb-2">
+                    <ModelSelector 
+                      currentModel={currentModel}
+                      availableModels={availableModels}
+                      onModelChange={handleModelChange}
+                      disabled={isProcessing || modelChanging}
+                    />
                   </div>
-                </div>
+                  
+                  <div className="w-full mb-4">
+                    <div className="flex border-b border-gray-200 dark:border-gray-700">
+                      <button
+                        className={`py-2 px-4 text-sm sm:text-base ${
+                          activeTab === "microphone"
+                            ? "border-b-2 border-blue-500 font-medium"
+                            : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                        }`}
+                        onClick={() => setActiveTab("microphone")}
+                        disabled={isProcessing || modelChanging}
+                      >
+                        Microphone
+                      </button>
+                      <button
+                        className={`py-2 px-4 text-sm sm:text-base ${
+                          activeTab === "file"
+                            ? "border-b-2 border-blue-500 font-medium"
+                            : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                        }`}
+                        onClick={() => setActiveTab("file")}
+                        disabled={isProcessing || modelChanging}
+                      >
+                        Upload File
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
 
               <div className="w-full max-w-[600px] p-2">
@@ -651,7 +718,7 @@ function App() {
                 {activeTab === "file" && status === "ready" && (
                   <FileUpload 
                     onFileSelected={handleFileSelected}
-                    isProcessing={isProcessing}
+                    isProcessing={isProcessing || modelChanging}
                   />
                 )}
                 
@@ -690,7 +757,7 @@ function App() {
                         autoProcess={autoProcess}
                         onToggleAutoProcess={toggleAutoProcess}
                         onManualProcess={handleManualProcess}
-                        isProcessing={isProcessing}
+                        isProcessing={isProcessing || modelChanging}
                       />
                     </div>
                   </>

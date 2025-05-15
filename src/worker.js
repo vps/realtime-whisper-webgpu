@@ -11,47 +11,16 @@ const MAX_NEW_TOKENS = 64;
 let previousTranscription = "";
 let transcriptionHistory = [];
 
-/**
- * This class uses the Singleton pattern to ensure that only one instance of the model is loaded.
- */
-class AutomaticSpeechRecognitionPipeline {
-  static model_id = "onnx-community/whisper-base";
-  static tokenizer = null;
-  static processor = null;
-  static model = null;
+// Model versions available for Whisper
+const MODEL_VERSIONS = {
+  "tiny": "onnx-community/whisper-tiny",   // ~150MB
+  "base": "onnx-community/whisper-base",   // ~200MB
+  "small": "onnx-community/whisper-small", // ~500MB
+  "medium": "onnx-community/whisper-medium" // ~1.5GB
+};
 
-  static async getInstance(progress_callback = null) {
-    try {
-      this.tokenizer ??= AutoTokenizer.from_pretrained(this.model_id, {
-        progress_callback,
-      });
-      this.processor ??= AutoProcessor.from_pretrained(this.model_id, {
-        progress_callback,
-      });
-
-      this.model ??= WhisperForConditionalGeneration.from_pretrained(
-        this.model_id,
-        {
-          dtype: {
-            encoder_model: "fp32", // 'fp16' works too
-            decoder_model_merged: "q4", // or 'fp32' ('fp16' is broken)
-          },
-          device: "webgpu",
-          progress_callback,
-        },
-      );
-
-      return Promise.all([this.tokenizer, this.processor, this.model]);
-    } catch (error) {
-      console.error("Error initializing pipeline:", error);
-      self.postMessage({ 
-        status: "error", 
-        message: "Failed to initialize speech recognition model" 
-      });
-      throw error;
-    }
-  }
-}
+// Default model version
+let currentModelVersion = "base";
 
 // Function to clean up transcription text
 function cleanTranscription(text) {
@@ -97,6 +66,61 @@ function mergeTranscriptions(previous, current) {
   
   // If no significant overlap, just concatenate with a space
   return previous + " " + current;
+}
+
+/**
+ * This class uses the Singleton pattern to ensure that only one instance of the model is loaded.
+ */
+class AutomaticSpeechRecognitionPipeline {
+  static model_id = MODEL_VERSIONS[currentModelVersion];
+  static tokenizer = null;
+  static processor = null;
+  static model = null;
+
+  static async getInstance(progress_callback = null) {
+    try {
+      // If model version has changed, reset everything
+      if (this.model_id !== MODEL_VERSIONS[currentModelVersion]) {
+        this.unload();
+        this.model_id = MODEL_VERSIONS[currentModelVersion];
+      }
+      
+      this.tokenizer ??= AutoTokenizer.from_pretrained(this.model_id, {
+        progress_callback,
+      });
+      this.processor ??= AutoProcessor.from_pretrained(this.model_id, {
+        progress_callback,
+      });
+
+      this.model ??= WhisperForConditionalGeneration.from_pretrained(
+        this.model_id,
+        {
+          dtype: {
+            encoder_model: "fp32", // 'fp16' works too
+            decoder_model_merged: "q4", // or 'fp32' ('fp16' is broken)
+          },
+          device: "webgpu",
+          progress_callback,
+        },
+      );
+
+      return Promise.all([this.tokenizer, this.processor, this.model]);
+    } catch (error) {
+      console.error("Error initializing pipeline:", error);
+      self.postMessage({ 
+        status: "error", 
+        message: "Failed to initialize speech recognition model" 
+      });
+      throw error;
+    }
+  }
+  
+  static unload() {
+    // Release resources
+    this.tokenizer = null;
+    this.processor = null;
+    this.model = null;
+  }
 }
 
 let processing = false;
@@ -207,11 +231,16 @@ async function generate({ audio, language, reset = false }) {
   }
 }
 
-async function load() {
+async function load(modelVersion = "base") {
   try {
+    // Update the current model version
+    if (modelVersion in MODEL_VERSIONS) {
+      currentModelVersion = modelVersion;
+    }
+    
     self.postMessage({
       status: "loading",
-      data: "Loading model...",
+      data: `Loading ${currentModelVersion} model...`,
     });
 
     // Load the pipeline and save it for future use.
@@ -232,7 +261,10 @@ async function load() {
       input_features: full([1, 80, 3000], 0.0),
       max_new_tokens: 1,
     });
-    self.postMessage({ status: "ready" });
+    self.postMessage({ 
+      status: "ready",
+      modelVersion: currentModelVersion
+    });
   } catch (error) {
     console.error("Error during model load:", error);
     self.postMessage({ 
@@ -249,7 +281,7 @@ self.addEventListener("message", async (e) => {
 
     switch (type) {
       case "load":
-        load();
+        load(data?.modelVersion);
         break;
 
       case "generate":
@@ -272,6 +304,29 @@ self.addEventListener("message", async (e) => {
           status: "history",
           history: transcriptionHistory,
           output: previousTranscription
+        });
+        break;
+        
+      case "changeModel":
+        if (data?.modelVersion && MODEL_VERSIONS[data.modelVersion]) {
+          self.postMessage({
+            status: "info",
+            message: `Switching to ${data.modelVersion} model...`
+          });
+          load(data.modelVersion);
+        } else {
+          self.postMessage({
+            status: "error",
+            message: "Invalid model version specified"
+          });
+        }
+        break;
+        
+      case "getAvailableModels":
+        self.postMessage({
+          status: "models",
+          models: Object.keys(MODEL_VERSIONS),
+          currentModel: currentModelVersion
         });
         break;
         
