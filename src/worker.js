@@ -5,6 +5,7 @@ import {
   TextStreamer,
   full,
 } from "@huggingface/transformers";
+import { cleanTranscription, mergeTranscriptions } from "./utils/transcription.js";
 
 const MAX_NEW_TOKENS = 64;
 // Store previous transcription context
@@ -22,103 +23,6 @@ const MODEL_VERSIONS = {
 // Default model version
 let currentModelVersion = "base";
 
-// Minimum word overlap to consider as duplicated content
-const MIN_OVERLAP_WORDS = 3;
-// Maximum words to check for overlap
-const MAX_OVERLAP_WORDS = 8;
-
-// Function to clean up transcription text
-function cleanTranscription(text) {
-  if (!text) return "";
-  
-  // Remove [BLANK_AUDIO] tokens and other artifacts in brackets
-  let cleaned = text.replace(/\[BLANK_AUDIO\]/g, "");
-  cleaned = cleaned.replace(/\[[^\]]*\]/g, ""); // Remove anything in square brackets
-  
-  // Remove multiple consecutive spaces
-  cleaned = cleaned.replace(/\s+/g, " ");
-  
-  // Trim leading/trailing whitespace
-  cleaned = cleaned.trim();
-  
-  return cleaned;
-}
-
-// Function to smartly merge transcription segments to avoid duplications
-function mergeTranscriptions(previous, current) {
-  if (!previous) return current || "";
-  if (!current) return previous || "";
-  
-  // Clean both segments
-  previous = cleanTranscription(previous);
-  current = cleanTranscription(current);
-  
-  if (!current) return previous;
-  
-  // Check if current is already contained in previous
-  if (previous.includes(current)) {
-    return previous;
-  }
-  
-  // Check if previous is entirely contained in current (less common but possible)
-  if (current.includes(previous)) {
-    return current;
-  }
-  
-  // Check for overlap at the end of previous and start of current
-  const prevWords = previous.split(" ");
-  const currWords = current.split(" ");
-  
-  // Try different overlap lengths starting from longer to shorter
-  for (let overlapLength = Math.min(MAX_OVERLAP_WORDS, Math.min(prevWords.length, currWords.length)); 
-       overlapLength >= MIN_OVERLAP_WORDS; 
-       overlapLength--) {
-    
-    const prevEnd = prevWords.slice(-overlapLength).join(" ");
-    const currStart = currWords.slice(0, overlapLength).join(" ");
-    
-    if (prevEnd === currStart) {
-      return previous + " " + currWords.slice(overlapLength).join(" ");
-    }
-  }
-  
-  // Check for similar phrases (not exact matches) that might indicate duplication
-  const prevPhrase = prevWords.slice(-MIN_OVERLAP_WORDS).join(" ").toLowerCase();
-  const currPhrase = currWords.slice(0, MIN_OVERLAP_WORDS).join(" ").toLowerCase();
-  
-  // If phrases are similar enough (85% of words match), treat as overlap
-  const similarWordsCount = prevWords
-    .slice(-MIN_OVERLAP_WORDS)
-    .filter(word => currWords.slice(0, MIN_OVERLAP_WORDS).includes(word))
-    .length;
-  
-  if (similarWordsCount >= MIN_OVERLAP_WORDS * 0.85) {
-    return previous + " " + currWords.slice(MIN_OVERLAP_WORDS).join(" ");
-  }
-  
-  // If no clear overlap, check if previous ends with a sentence boundary
-  const lastChar = previous[previous.length - 1];
-  if (['.', '!', '?'].includes(lastChar)) {
-    // Previous ends with sentence end, likely a good boundary
-    return previous + " " + current;
-  }
-  
-  // Check for immediate repeated words at the boundary
-  const lastWord = prevWords[prevWords.length - 1];
-  const firstWord = currWords[0];
-  
-  if (lastWord === firstWord) {
-    return previous + " " + currWords.slice(1).join(" ");
-  }
-  
-  // Remove duplicate phrases in the combined text
-  const combined = previous + " " + current;
-  
-  // Simple pattern to catch immediate duplications like "hello hello" or "this is this is"
-  const deduped = combined.replace(/\b(\w+\s+\w+)\s+\1\b/g, '$1');
-  
-  return deduped;
-}
 
 /**
  * This class uses the Singleton pattern to ensure that only one instance of the model is loaded.
