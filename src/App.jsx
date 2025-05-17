@@ -11,6 +11,9 @@ import { TranscriptionHistory } from "./components/TranscriptionHistory";
 import { FileUpload } from "./components/FileUpload";
 import { ErrorMessage } from "./components/ErrorMessage";
 import { ModelSelector } from "./components/ModelSelector";
+import { MyHistory } from "./components/MyHistory";
+import { supabase } from "./supabase";
+import { saveTranscript } from "./utils/database";
 import { 
   saveLanguagePreference, 
   loadLanguagePreference,
@@ -34,6 +37,8 @@ const MAX_SAMPLES = WHISPER_SAMPLING_RATE * MAX_AUDIO_LENGTH;
 function App() {
   // Create a reference to the worker object.
   const worker = useRef(null);
+
+  const [user, setUser] = useState(null);
 
   const recorderRef = useRef(null);
 
@@ -75,6 +80,18 @@ function App() {
   const [availableModels, setAvailableModels] = useState(["tiny", "base", "small", "medium"]);
   const [currentModel, setCurrentModel] = useState(() => loadModelPreference());
   const [modelChanging, setModelChanging] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user || null);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
   
   // Mobile viewport fix
   useEffect(() => {
@@ -203,6 +220,14 @@ function App() {
           }
           if (e.data.history) {
             setTranscriptionHistory(e.data.history);
+            const segment = e.data.history[e.data.history.length - 1];
+            if (user && segment) {
+              saveTranscript({
+                text: segment.text,
+                language: segment.language,
+                timestamp: segment.timestamp,
+              });
+            }
           }
           break;
           
@@ -785,10 +810,14 @@ function App() {
               )}
               
               {status === "ready" && transcriptionHistory.length > 0 && (
-                <TranscriptionHistory 
+                <TranscriptionHistory
                   history={transcriptionHistory}
                   onClearHistory={handleClearHistory}
                 />
+              )}
+
+              {status === "ready" && user && (
+                <MyHistory />
               )}
               
               {status === "loading" && (
