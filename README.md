@@ -1,8 +1,14 @@
-# React + Vite
+# Realtime Whisper WebGPU
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This project demonstrates in-browser speech recognition using the Whisper model and WebGPU. It now integrates Supabase for per‑user transcript storage.
 
-Currently, two official plugins are available:
+## Environment Variables
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Copy `.env.example` to `.env` and provide your Supabase credentials:
+
+```
+VITE_SUPABASE_URL=your-url
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+
+Running `npm run dev` will log **"Supabase connected"** if the client is configured correctly.
