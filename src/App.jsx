@@ -110,7 +110,7 @@ function App() {
     saveModelPreference(currentModel);
   }, [currentModel]);
 
-  // We use the `useEffect` hook to setup the worker as soon as the `App` component is mounted.
+  // We use the `useEffect` hook to set up the worker as soon as the `App` component is mounted.
   useEffect(() => {
     if (!worker.current) {
       try {
