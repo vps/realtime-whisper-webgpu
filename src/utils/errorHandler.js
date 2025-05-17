@@ -133,7 +133,7 @@ export const checkBrowserSupport = () => {
   };
   
   const missingFeatures = Object.entries(features)
-    .filter(([_, supported]) => !supported)
+    .filter(([, supported]) => !supported)
     .map(([feature]) => feature);
   
   return {

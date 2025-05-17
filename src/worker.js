@@ -83,8 +83,6 @@ function mergeTranscriptions(previous, current) {
   }
   
   // Check for similar phrases (not exact matches) that might indicate duplication
-  const prevPhrase = prevWords.slice(-MIN_OVERLAP_WORDS).join(" ").toLowerCase();
-  const currPhrase = currWords.slice(0, MIN_OVERLAP_WORDS).join(" ").toLowerCase();
   
   // If phrases are similar enough (85% of words match), treat as overlap
   const similarWordsCount = prevWords
@@ -340,9 +338,9 @@ async function load(modelVersion = "base", retryCount = 0) {
       data: `Loading ${currentModelVersion} model...`,
     });
 
-    // Load the pipeline and save it for future use.
-    const [tokenizer, processor, model] =
-      await AutomaticSpeechRecognitionPipeline.getInstance((x) => {
+      // Load the pipeline and save it for future use.
+      const [, , model] =
+        await AutomaticSpeechRecognitionPipeline.getInstance((x) => {
         // We also add a progress callback to the pipeline so that we can
         // track model loading.
         self.postMessage(x);
