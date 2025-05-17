@@ -361,9 +361,13 @@ function App() {
 
   const processAudioChunks = async () => {
     if (chunks.length === 0) return;
-    
+
+    // Copy and clear chunks to avoid reprocessing previously collected audio
+    const chunksToProcess = [...chunks];
+    setChunks([]);
+
     // Generate from data
-    const blob = new Blob(chunks, { type: recorderRef.current.mimeType });
+    const blob = new Blob(chunksToProcess, { type: recorderRef.current.mimeType });
 
     const fileReader = new FileReader();
 
