@@ -1,8 +1,34 @@
-# React + Vite
+# Real-time Whisper WebGPU
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A demo React application that runs the Whisper speech transcription model in the browser using WebGPU for real-time inference.
 
-Currently, two official plugins are available:
+## Development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Install dependencies and start the development server:
+
+```bash
+npm install
+npm run dev
+```
+
+## Build
+
+Generate a production build:
+
+```bash
+npm run build
+```
+
+Preview the built app locally:
+
+```bash
+npm run preview
+```
+
+## Lint
+
+Run ESLint on the project sources:
+
+```bash
+npm run lint
+```
