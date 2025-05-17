@@ -35,7 +35,7 @@ export function AudioVisualizer({ stream, ...props }) {
       analyser.getByteTimeDomainData(dataArray);
 
       // Use theme-aware colors
-      const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isDarkMode = document.documentElement.classList.contains('dark');
       
       canvasCtx.fillStyle = isDarkMode ? "rgb(31, 41, 55)" : "rgb(255, 255, 255)";
       canvasCtx.fillRect(0, 0, canvas.width, canvas.height);

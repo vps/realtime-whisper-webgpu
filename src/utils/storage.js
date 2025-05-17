@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   AUTO_PROCESS: 'whisper-webgpu-auto-process',
   TRANSCRIPTION_HISTORY: 'whisper-webgpu-history',
   MODEL_PREFERENCE: 'whisper-webgpu-model',
+  THEME: 'whisper-webgpu-theme',
 };
 
 /**
@@ -108,6 +109,25 @@ export const saveModelPreference = (model) => {
  */
 export const loadModelPreference = () => {
   return loadFromStorage(STORAGE_KEYS.MODEL_PREFERENCE, 'base');
+};
+
+/**
+ * Save dark mode preference
+ * @param {boolean} darkMode - Whether dark mode is enabled
+ */
+export const saveDarkModePreference = (darkMode) => {
+  return saveToStorage(STORAGE_KEYS.THEME, darkMode);
+};
+
+/**
+ * Load dark mode preference
+ * Defaults to system preference when not set
+ * @returns {boolean} Dark mode setting
+ */
+export const loadDarkModePreference = () => {
+  const systemPrefersDark =
+    window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  return loadFromStorage(STORAGE_KEYS.THEME, systemPrefersDark);
 };
 
 /**

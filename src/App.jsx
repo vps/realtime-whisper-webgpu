@@ -11,6 +11,7 @@ import { TranscriptionHistory } from "./components/TranscriptionHistory";
 import { FileUpload } from "./components/FileUpload";
 import { ErrorMessage } from "./components/ErrorMessage";
 import { ModelSelector } from "./components/ModelSelector";
+import { Header } from "./components/Header";
 import { 
   saveLanguagePreference, 
   loadLanguagePreference,
@@ -19,7 +20,9 @@ import {
   saveTranscriptionHistory,
   loadTranscriptionHistory,
   saveModelPreference,
-  loadModelPreference
+  loadModelPreference,
+  saveDarkModePreference,
+  loadDarkModePreference
 } from "./utils/storage";
 import {
   ERROR_TYPES,
@@ -64,6 +67,9 @@ function App() {
   // Auto-processing
   const [autoProcess, setAutoProcess] = useState(() => loadAutoProcessPreference());
   const processingTimeoutRef = useRef(null);
+
+  // Theme
+  const [darkMode, setDarkMode] = useState(() => loadDarkModePreference());
   
   // UI state
   const [activeTab, setActiveTab] = useState("microphone"); // "microphone" or "file"
@@ -109,6 +115,11 @@ function App() {
   useEffect(() => {
     saveModelPreference(currentModel);
   }, [currentModel]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+    saveDarkModePreference(darkMode);
+  }, [darkMode]);
 
   // We use the `useEffect` hook to setup the worker as soon as the `App` component is mounted.
   useEffect(() => {
@@ -571,10 +582,15 @@ function App() {
     }
   };
 
+  const toggleDarkMode = () => {
+    setDarkMode((prev) => !prev);
+  };
+
   return (
     <ErrorBoundary>
       <BrowserCheck />
       <div className="flex flex-col h-screen h-screen-dynamic mx-auto justify-end text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-900">
+        <Header darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
         {
           <div className="h-full overflow-auto scrollbar-thin flex justify-center items-center flex-col relative">
             <div className="flex flex-col items-center mb-1 max-w-[400px] text-center px-4 sm:px-0">
