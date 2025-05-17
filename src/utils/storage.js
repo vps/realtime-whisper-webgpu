@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   AUTO_PROCESS: 'whisper-webgpu-auto-process',
   TRANSCRIPTION_HISTORY: 'whisper-webgpu-history',
   MODEL_PREFERENCE: 'whisper-webgpu-model',
+  OFFLINE_MODE: 'whisper-webgpu-offline',
 };
 
 /**
@@ -108,6 +109,17 @@ export const saveModelPreference = (model) => {
  */
 export const loadModelPreference = () => {
   return loadFromStorage(STORAGE_KEYS.MODEL_PREFERENCE, 'base');
+};
+
+export const saveOfflinePreference = (offline) => {
+  return saveToStorage(STORAGE_KEYS.OFFLINE_MODE, offline);
+};
+
+export const loadOfflinePreference = () => {
+  return loadFromStorage(
+    STORAGE_KEYS.OFFLINE_MODE,
+    !navigator.gpu
+  );
 };
 
 /**

@@ -11,6 +11,7 @@ import { TranscriptionHistory } from "./components/TranscriptionHistory";
 import { FileUpload } from "./components/FileUpload";
 import { ErrorMessage } from "./components/ErrorMessage";
 import { ModelSelector } from "./components/ModelSelector";
+import { OfflineToggle } from "./components/OfflineToggle";
 import { 
   saveLanguagePreference, 
   loadLanguagePreference,
@@ -19,7 +20,9 @@ import {
   saveTranscriptionHistory,
   loadTranscriptionHistory,
   saveModelPreference,
-  loadModelPreference
+  loadModelPreference,
+  saveOfflinePreference,
+  loadOfflinePreference
 } from "./utils/storage";
 import {
   ERROR_TYPES,
@@ -64,6 +67,9 @@ function App() {
   // Auto-processing
   const [autoProcess, setAutoProcess] = useState(() => loadAutoProcessPreference());
   const processingTimeoutRef = useRef(null);
+
+  const [offlineMode, setOfflineMode] = useState(() => loadOfflinePreference());
+  const webgpuAvailable = !!navigator.gpu;
   
   // UI state
   const [activeTab, setActiveTab] = useState("microphone"); // "microphone" or "file"
@@ -110,20 +116,27 @@ function App() {
     saveModelPreference(currentModel);
   }, [currentModel]);
 
+  useEffect(() => {
+    saveOfflinePreference(offlineMode);
+  }, [offlineMode]);
+
   // We use the `useEffect` hook to setup the worker as soon as the `App` component is mounted.
   useEffect(() => {
-    if (!worker.current) {
-      try {
-        // Create the worker if it does not yet exist.
-        worker.current = new Worker(new URL("./worker.js", import.meta.url), {
-          type: "module",
-        });
-      } catch (err) {
-        const errorDetails = logError(ERROR_TYPES.UNKNOWN, err);
-        setError(errorDetails.message);
-        setErrorType(ERROR_TYPES.UNKNOWN);
-        return;
-      }
+    if (worker.current) {
+      worker.current.terminate();
+      worker.current = null;
+    }
+
+    try {
+      const url = offlineMode ? "./offlineWorker.js" : "./worker.js";
+      worker.current = new Worker(new URL(url, import.meta.url), {
+        type: "module",
+      });
+    } catch (err) {
+      const errorDetails = logError(ERROR_TYPES.UNKNOWN, err);
+      setError(errorDetails.message);
+      setErrorType(ERROR_TYPES.UNKNOWN);
+      return;
     }
 
     // Create a callback function for messages from the worker thread.
@@ -254,7 +267,7 @@ function App() {
     return () => {
       worker.current.removeEventListener("message", onMessageReceived);
     };
-  }, [activeTab]);
+  }, [activeTab, offlineMode]);
 
   useEffect(() => {
     if (recorderRef.current) return; // Already set
@@ -574,6 +587,11 @@ function App() {
   return (
     <ErrorBoundary>
       <BrowserCheck />
+      {offlineMode && !webgpuAvailable && (
+        <div className="bg-yellow-200 text-yellow-900 text-center py-2 text-xs sm:text-sm">
+          WebGPU not detected. Running in offline mode.
+        </div>
+      )}
       <div className="flex flex-col h-screen h-screen-dynamic mx-auto justify-end text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-900">
         {
           <div className="h-full overflow-auto scrollbar-thin flex justify-center items-center flex-col relative">
@@ -779,6 +797,16 @@ function App() {
                           recorderRef.current.start();
                         }
                       }}
+                    />
+                  </div>
+                  <div className="ml-4">
+                    <OfflineToggle
+                      offlineMode={offlineMode}
+                      onToggle={() => {
+                        if (!webgpuAvailable && offlineMode) return;
+                        setOfflineMode(!offlineMode);
+                      }}
+                      disabled={!webgpuAvailable}
                     />
                   </div>
                 </div>

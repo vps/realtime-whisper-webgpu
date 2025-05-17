@@ -1,9 +1,11 @@
 import { checkBrowserSupport } from "../utils/errorHandler";
 
 export function BrowserCheck() {
-  const { supported, missingFeatures } = checkBrowserSupport();
-  
-  if (!supported) {
+  const { missingFeatures } = checkBrowserSupport();
+
+  const showOverlay = missingFeatures.filter(f => f !== 'webGPU').length > 0;
+
+  if (showOverlay) {
     return (
       <div className="fixed w-screen h-screen bg-black z-10 bg-opacity-[92%] text-white text-xl sm:text-2xl font-semibold flex flex-col justify-center items-center text-center p-4">
         <h2 className="text-2xl sm:text-3xl mb-4">Browser Compatibility Issue</h2>
