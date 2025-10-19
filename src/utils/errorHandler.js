@@ -123,9 +123,11 @@ export const logError = (errorType, error, context = {}) => {
  * @returns {Object} Object with support status and missing features
  */
 export const checkBrowserSupport = () => {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
   const features = {
     webGPU: !!navigator.gpu,
-    audioContext: !!window.AudioContext,
+    audioContext: !!AudioContextClass,
     mediaDevices: !!navigator.mediaDevices,
     getUserMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
     webWorkers: !!window.Worker,
