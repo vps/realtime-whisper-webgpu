@@ -110,6 +110,20 @@ function App() {
     };
   }, []);
 
+  // Lock orientation to portrait on supported browsers
+  useEffect(() => {
+    const lock = async () => {
+      try {
+        if (screen.orientation?.lock) {
+          await screen.orientation.lock('portrait');
+        }
+      } catch (_) {
+        // ignore failures
+      }
+    };
+    lock();
+  }, []);
+
   // Save preferences when they change
   useEffect(() => {
     saveLanguagePreference(language);
@@ -603,7 +617,7 @@ function App() {
   return (
     <ErrorBoundary>
       <BrowserCheck />
-      <div className="flex flex-col h-screen h-screen-dynamic mx-auto justify-end text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-900">
+      <div className="flex flex-col h-screen h-screen-dynamic w-full max-w-screen-sm mx-auto justify-end text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-900">
         {
           <div className="h-full overflow-auto scrollbar-thin flex justify-center items-center flex-col relative">
             <div className="flex flex-col items-center mb-1 max-w-[400px] text-center px-4 sm:px-0">
@@ -620,7 +634,7 @@ function App() {
               </h2>
             </div>
 
-            <div className="flex flex-col items-center px-2 sm:px-4 w-full max-w-[600px]">
+            <div className="flex flex-col items-center px-2 sm:px-4 w-full max-w-screen-sm">
               {error && (
                 <ErrorMessage 
                   message={error}
@@ -739,7 +753,7 @@ function App() {
                 </>
               )}
 
-              <div className="w-full max-w-[600px] p-2">
+              <div className="w-full max-w-screen-sm p-2">
                 {activeTab === "microphone" && status === "ready" && (
                   <AudioVisualizer className="w-full rounded-lg" stream={stream} />
                 )}
@@ -794,7 +808,7 @@ function App() {
               </div>
               
               {status === "ready" && (
-                <div className="relative w-full max-w-[600px] flex justify-center items-center mt-2">
+                <div className="relative w-full max-w-screen-sm flex justify-center items-center mt-2">
                   <div className="flex items-center space-x-2">
                     <span className="text-xs sm:text-sm">Language:</span>
                     <LanguageSelector
@@ -825,7 +839,7 @@ function App() {
               )}
               
               {status === "loading" && (
-                <div className="w-full max-w-[500px] text-left mx-auto p-4">
+                <div className="w-full max-w-screen-sm text-left mx-auto p-4">
                   <p className="text-center text-sm sm:text-base">{loadingMessage}</p>
                   {progressItems.map(({ file, progress, total }, i) => (
                     <Progress
